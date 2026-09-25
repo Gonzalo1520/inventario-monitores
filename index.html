@@ -2,49 +2,53 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Inventario Monitores V9</title>
-<script src="https://unpkg.com/@zxing/library@latest"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventario Monitores V10</title>
+
 <style>
 body{margin:0;background:#f4f6f8;font-family:Segoe UI,Arial;color:#222}
 header{background:#7a0019;color:#fff;padding:20px}
 .container{max-width:950px;margin:auto;padding:15px}
 .card{background:#fff;border-radius:16px;padding:18px;margin-bottom:15px;box-shadow:0 5px 15px #0002}
 button{width:100%;padding:14px;border:0;border-radius:10px;background:#7a0019;color:#fff;font-weight:bold;margin-top:10px}
-video{width:100%;background:#000;border-radius:12px}
+video{width:100%;border-radius:12px;background:#000}
+.status{padding:10px;border-radius:8px;background:#eee;margin-top:10px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-input,select,textarea{width:100%;padding:10px;border:1px solid #ccc;border-radius:8px}
+input,textarea,select{width:100%;padding:10px;border-radius:8px;border:1px solid #ccc}
 .auto{background:#eef1f4}
-.status{padding:10px;background:#eee;border-radius:8px}
-.ok{background:#e6f7ed;color:#087443}
-table{width:100%;border-collapse:collapse}
-td,th{border-bottom:1px solid #ddd;padding:8px}
 @media(max-width:700px){.grid{grid-template-columns:1fr}}
 </style>
 </head>
+
 <body>
 
 <header>
 <h1>Inventario de Monitores TI</h1>
-<p>Escaneo Dell / Samsung</p>
+<p>Escaneo de activos</p>
 </header>
 
 <div class="container">
 
 <div class="card">
-<h2>Escaneo</h2>
+<h2>Cámara</h2>
+
 <video id="video" autoplay playsinline></video>
 
-<button id="btnCam">Abrir cámara</button>
-<button id="btnStop">Detener cámara</button>
-<button id="btnCapture">Capturar y analizar</button>
+<button onclick="abrirCamara()">Abrir cámara</button>
+<button onclick="capturar()">Capturar etiqueta</button>
 
-<div id="status" class="status">Cámara detenida</div>
-<textarea id="debug" placeholder="Código detectado"></textarea>
+<div id="status" class="status">
+Cámara detenida
 </div>
 
+<textarea id="resultado" placeholder="Resultado"></textarea>
+
+</div>
+
+
 <div class="card">
-<h2>Datos técnicos</h2>
+<h2>Datos del monitor</h2>
+
 <div class="grid">
 <input id="marca" class="auto" placeholder="Marca">
 <input id="modelo" class="auto" placeholder="Modelo">
@@ -52,134 +56,65 @@ td,th{border-bottom:1px solid #ddd;padding:8px}
 <input id="tag" class="auto" placeholder="Service Tag">
 <input id="mac" class="auto" placeholder="MAC">
 <input id="fabricacion" class="auto" placeholder="Fabricación">
-<input id="express" class="auto" placeholder="Express Code">
-<input id="tamano" class="auto" placeholder="Tamaño">
-</div>
-</div>
 
-<div class="card">
-<h2>Asignación</h2>
-<div class="grid">
-<input id="activo" placeholder="Código activo">
 <input id="usuario" placeholder="Usuario">
 <input id="area" placeholder="Área">
-<input id="sede" placeholder="Sede">
 <input id="ubicacion" placeholder="Ubicación">
-<select id="estado"><option>Operativo</option><option>Observado</option><option>Reparación</option></select>
-</div>
-<textarea id="obs" placeholder="Observaciones"></textarea>
-<button id="save">Guardar monitor</button>
 </div>
 
-<div class="card">
-<h2>Resumen</h2>
-<p>Total: <b id="total">0</b></p>
-<table id="tabla"></table>
-<button id="csv">Exportar CSV</button>
 </div>
 
 </div>
 
 <script>
-let reader = new ZXing.BrowserMultiFormatReader();
-let running=false;
-let records=[];
 
-const $=id=>document.getElementById(id);
+let stream=null;
 
-function set(id,v){$(id).value=v||""}
+async function abrirCamara(){
 
-async function startCamera(){
- try{
-  const devices=await ZXing.BrowserCodeReader.listVideoInputDevices();
-  if(!devices.length) throw new Error("No hay cámara");
+try{
 
-  const cam=devices.find(d=>/back|rear|environment/i.test(d.label)) || devices[0];
+stream = await navigator.mediaDevices.getUserMedia({
+video:{
+facingMode:{
+ideal:"environment"
+}
+},
+audio:false
+});
 
-  await reader.decodeFromVideoDevice(cam.deviceId,"video",(result,err)=>{
-    if(result){
-      processCode(result.text);
-    }
-  });
+document.getElementById("video").srcObject=stream;
 
-  running=true;
-  $("status").innerHTML="Cámara activa. Apunta al código de la etiqueta.";
- }catch(e){
-  $("status").innerHTML="Error cámara: "+e.message;
- }
+document.getElementById("status").innerHTML=
+"Cámara activa. Permiso concedido.";
+
+}catch(error){
+
+document.getElementById("status").innerHTML=
+"Error cámara: "+error.message;
+
 }
 
-async function stopCamera(){
- try{
-  await reader.reset();
- }catch(e){}
- running=false;
- $("status").innerHTML="Cámara detenida";
 }
 
-function processCode(text){
- $("debug").value=text;
- let t=text.toUpperCase();
 
- if(t.includes("DELL"))set("marca","DELL");
- else if(t.includes("SAMSUNG"))set("marca","SAMSUNG");
+function capturar(){
 
- let x=t.match(/[PUS]\d{4}[A-Z]{1,4}/);
- if(x){
-  set("modelo",x[0]);
-  set("tamano",x[0].substring(1,3)+'"');
- }
+if(!stream){
 
- x=t.match(/TH-[A-Z0-9-]{10,50}/);
- if(x)set("serial",x[0]);
+document.getElementById("status").innerHTML=
+"Primero debe abrir la cámara.";
 
- x=t.match(/[A-Z0-9]{7}/);
- if(x)set("tag",x[0]);
+return;
 
- $("status").className="status ok";
- $("status").innerHTML="Código leído y campos actualizados";
 }
 
-function capture(){
- if(!running){
-  $("status").innerHTML="Primero abre la cámara";
-  return;
- }
- $("status").innerHTML="Analizando imagen...";
+document.getElementById("status").innerHTML=
+"Imagen capturada. Listo para análisis.";
+
 }
 
-function save(){
- let item={
- marca:marca.value,modelo:modelo.value,serial:serial.value,tag:tag.value,
- usuario:usuario.value,ubicacion:ubicacion.value
- };
- records.push(item);
- render();
- alert("Monitor guardado");
-}
-
-function render(){
- total.innerHTML=records.length;
- tabla.innerHTML="<tr><th>Marca</th><th>Modelo</th><th>Serial</th><th>Usuario</th></tr>";
- records.forEach(r=>{
- tabla.innerHTML+=`<tr><td>${r.marca}</td><td>${r.modelo}</td><td>${r.serial}</td><td>${r.usuario}</td></tr>`;
- });
-}
-
-function exportCSV(){
- let csv="Marca;Modelo;Serial;Tag;Usuario;Ubicacion\n";
- records.forEach(r=>csv+=`${r.marca};${r.modelo};${r.serial};${r.tag};${r.usuario};${r.ubicacion}\n`);
- let a=document.createElement("a");
- a.href=URL.createObjectURL(new Blob([csv]));
- a.download="inventario_monitores.csv";
- a.click();
-}
-
-$("btnCam").onclick=startCamera;
-$("btnStop").onclick=stopCamera;
-$("btnCapture").onclick=capture;
-$("save").onclick=save;
-$("csv").onclick=exportCSV;
 </script>
+
 </body>
 </html>
