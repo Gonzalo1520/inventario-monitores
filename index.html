@@ -2,141 +2,491 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Inventario Monitores V3</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventario de Monitores</title>
+
 <style>
-body{font-family:Arial;background:#f4f5f7;margin:0;color:#222}
-header{background:#7a0019;color:white;padding:18px}
-main{max-width:900px;margin:auto;padding:15px}
-.card{background:white;padding:15px;border-radius:12px;margin-bottom:15px}
-input,textarea,button{width:100%;padding:12px;margin:5px 0;border-radius:8px;border:1px solid #ccc}
-button{background:#7a0019;color:white;font-weight:bold;cursor:pointer}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.status{padding:10px;background:#eee;border-radius:8px}
-.ok{background:#dff5e6}
+:root{
+ --wine:#7a0019;
+ --wine-dark:#520012;
+ --bg:#f4f6f8;
+ --card:#fff;
+ --border:#d9dee5;
+ --text:#1f2937;
+ --muted:#667085;
+ --success:#067647;
+}
+
+*{box-sizing:border-box}
+
+body{
+ margin:0;
+ font-family:"Segoe UI",Arial,sans-serif;
+ background:var(--bg);
+ color:var(--text);
+}
+
+header{
+ background:linear-gradient(135deg,var(--wine),var(--wine-dark));
+ color:white;
+ padding:22px;
+}
+
+header h1{
+ margin:0;
+ font-size:24px;
+}
+
+header p{
+ margin:5px 0 0;
+ opacity:.9;
+}
+
+.container{
+ max-width:1000px;
+ margin:auto;
+ padding:20px;
+}
+
+.card{
+ background:var(--card);
+ border-radius:16px;
+ padding:20px;
+ margin-bottom:18px;
+ box-shadow:0 5px 18px rgba(0,0,0,.08);
+}
+
+.title{
+ font-size:18px;
+ font-weight:700;
+ margin-bottom:15px;
+}
+
+.grid{
+ display:grid;
+ grid-template-columns:repeat(2,1fr);
+ gap:14px;
+}
+
+.field label{
+ display:block;
+ font-size:12px;
+ font-weight:700;
+ color:var(--muted);
+ margin-bottom:5px;
+}
+
+input,select,textarea{
+ width:100%;
+ padding:12px;
+ border-radius:10px;
+ border:1px solid var(--border);
+ font-size:14px;
+}
+
+.auto{
+ background:#f2f4f7;
+}
+
+textarea{
+ min-height:90px;
+ resize:none;
+}
+
+button{
+ width:100%;
+ padding:14px;
+ border:0;
+ border-radius:10px;
+ background:var(--wine);
+ color:white;
+ font-weight:700;
+ cursor:pointer;
+ margin-top:12px;
+}
+
+button.secondary{
+ background:#344054;
+}
+
+.status{
+ padding:12px;
+ margin-top:12px;
+ border-radius:10px;
+ background:#f2f4f7;
+}
+
+.status.ok{
+ background:#e7f6ec;
+ color:var(--success);
+}
+
+.preview{
+ width:100%;
+ max-height:300px;
+ object-fit:contain;
+ border-radius:12px;
+ margin-top:12px;
+}
+
+table{
+ width:100%;
+ border-collapse:collapse;
+ font-size:13px;
+}
+
+td,th{
+ padding:8px;
+ border-bottom:1px solid var(--border);
+ text-align:left;
+}
+
+@media(max-width:700px){
+ .grid{
+  grid-template-columns:1fr;
+ }
+}
 </style>
+
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
 </head>
+
 <body>
+
 <header>
-<h2>Inventario Monitores V3</h2>
-<p>Dell / Samsung OCR inteligente</p>
+<h1>Inventario de Monitores</h1>
+<p>Dell / Samsung - Gestión de activos TI</p>
 </header>
 
-<main>
+<div class="container">
+
+
 <div class="card">
-<h3>Foto de etiqueta</h3>
+<div class="title">1. Captura de etiqueta</div>
+
 <input id="foto" type="file" accept="image/*" capture="environment">
-<button onclick="leer()">Analizar etiqueta</button>
-<div id="estado" class="status">Esperando imagen</div>
+
+<img id="preview" class="preview" style="display:none">
+
+<button onclick="analizarEtiqueta()">Leer etiqueta</button>
+
+<div id="estado" class="status">
+Esperando imagen...
+</div>
+
 <textarea id="ocr" placeholder="Texto reconocido"></textarea>
+
 </div>
 
+
 <div class="card">
-<h3>Datos detectados</h3>
+
+<div class="title">2. Información del fabricante (automático)</div>
+
 <div class="grid">
-<input id="marca" placeholder="Marca">
-<input id="modelo" placeholder="Modelo">
-<input id="tag" placeholder="Service Tag">
-<input id="serial" placeholder="Serial">
-<input id="mac" placeholder="MAC">
-<input id="fecha" placeholder="Fecha fabricación">
-<input id="express" placeholder="Express Code">
-<input id="activo" placeholder="Código activo">
-<input id="usuario" placeholder="Usuario">
-<input id="ubicacion" placeholder="Ubicación">
-</div>
-<button onclick="guardar()">Guardar monitor</button>
+
+<div class="field">
+<label>Marca</label>
+<input id="marca" class="auto" readonly>
 </div>
 
-<div class="card">
-<button onclick="csv()">Exportar CSV</button>
-<table id="tabla" border="1" width="100%"></table>
+<div class="field">
+<label>Modelo</label>
+<input id="modelo" class="auto" readonly>
 </div>
-</main>
+
+<div class="field">
+<label>Service Tag</label>
+<input id="tag" class="auto" readonly>
+</div>
+
+<div class="field">
+<label>Número de Serie</label>
+<input id="serial" class="auto" readonly>
+</div>
+
+<div class="field">
+<label>MAC Address</label>
+<input id="mac" class="auto" readonly>
+</div>
+
+<div class="field">
+<label>Fecha fabricación</label>
+<input id="fabricacion" class="auto" readonly>
+</div>
+
+<div class="field">
+<label>Express Service Code</label>
+<input id="express" class="auto" readonly>
+</div>
+
+<div class="field">
+<label>Tamaño</label>
+<input id="tamano" class="auto" readonly>
+</div>
+
+</div>
+
+</div>
+
+
+<div class="card">
+
+<div class="title">3. Información patrimonial</div>
+
+<div class="grid">
+
+<div class="field">
+<label>Código activo interno</label>
+<input id="activo">
+</div>
+
+<div class="field">
+<label>Estado</label>
+<select id="estadoActivo">
+<option>Operativo</option>
+<option>Operativo con observación</option>
+<option>En reparación</option>
+<option>Almacén</option>
+<option>Baja</option>
+</select>
+</div>
+
+</div>
+
+</div>
+
+
+<div class="card">
+
+<div class="title">4. Asignación del equipo</div>
+
+<div class="grid">
+
+<div class="field">
+<label>Usuario asignado</label>
+<input id="usuario">
+</div>
+
+<div class="field">
+<label>Área / Gerencia</label>
+<input id="area">
+</div>
+
+<div class="field">
+<label>Sede</label>
+<input id="sede">
+</div>
+
+<div class="field">
+<label>Ubicación física</label>
+<input id="ubicacion">
+</div>
+
+</div>
+
+</div>
+
+
+<div class="card">
+
+<div class="title">5. Observaciones</div>
+
+<textarea id="observaciones"></textarea>
+
+<button onclick="guardar()">Guardar activo</button>
+
+</div>
+
+
+<div class="card">
+
+<div class="title">Inventario registrado</div>
+
+<button class="secondary" onclick="exportar()">Exportar Excel CSV</button>
+
+<table id="tabla"></table>
+
+</div>
+
+
+</div>
+
 
 <script>
+
 let inventario=[];
 
+const ids=[
+"marca","modelo","tag","serial","mac",
+"fabricacion","express","tamano",
+"activo","estadoActivo","usuario",
+"area","sede","ubicacion","observaciones"
+];
+
+
+function set(id,val){
+ document.getElementById(id).value=val || "";
+}
+
+
 function normalizar(t){
-return t.toUpperCase()
+
+return t
+.toUpperCase()
 .replace(/D3LL/g,"DELL")
 .replace(/SVCTAG/g,"SVC TAG")
-.replace(/SERVICETAG/g,"SVC TAG");
+.replace(/SERVICE TAG/g,"SVC TAG");
+
 }
 
-function extraer(t){
-t=normalizar(t);
 
-if(t.includes("DELL")) marca.value="DELL";
-if(t.includes("SAMSUNG")) marca.value="SAMSUNG";
+function analizarDatos(texto){
 
+let t=normalizar(texto);
 let x;
-x=t.match(/\b(P\d{4}[A-Z]{1,4})\b/);
-if(x) modelo.value=x[1];
+
+
+if(t.includes("DELL"))
+ set("marca","DELL");
+
+else if(t.includes("SAMSUNG"))
+ set("marca","SAMSUNG");
+
+
+x=t.match(/\b[PUS]\d{4}[A-Z]{1,4}\b/);
+if(x){
+ set("modelo",x[0]);
+ let size=x[0].match(/\d{2}/);
+ if(size)set("tamano",size[0]+'"');
+}
+
 
 x=t.match(/SVC\s*TAG[:\s\n]*([A-Z0-9]{6,8})/);
-if(x) tag.value=x[1];
+if(x)set("tag",x[1]);
+
 
 x=t.match(/S\/N[:\s\n]*([A-Z0-9\-]{10,50})/);
-if(x) serial.value=x[1];
+if(x)set("serial",x[1]);
+
 
 x=t.match(/MAC\s*ADDRESS[:\s]*([A-F0-9]{12})/);
-if(x) mac.value=x[1];
+if(x)set("mac",x[1]);
 
-x=t.match(/DATE\s*OF\s*MFG.*?([A-Z]+\s+\d{4})/);
-if(x) fecha.value=x[1];
 
-x=t.match(/EXPRESS\s*SERVICE\s*CODE[:\s\n]*([0-9\s]{8,20})/);
-if(x) express.value=x[1];
+x=t.match(/([A-Z]+\s+\d{4})/);
+if(x && t.includes("DATE"))
+ set("fabricacion",x[1]);
 
-estado.innerHTML="Datos extraídos correctamente. Revisar antes de guardar.";
-estado.className="status ok";
+
+x=t.match(/EXPRESS SERVICE CODE[:\s\n]*([0-9\s]{8,20})/);
+if(x)set("express",x[1].trim());
+
+
+document.getElementById("estado").innerHTML=
+"Datos detectados correctamente. Revisar antes de guardar.";
+
+document.getElementById("estado").className="status ok";
+
 }
 
-async function leer(){
-let f=foto.files[0];
-if(!f)return alert("Seleccione una foto");
 
-estado.innerHTML="Procesando OCR...";
-let r=await Tesseract.recognize(f,"eng");
-ocr.value=r.data.text;
-extraer(r.data.text);
+async function analizarEtiqueta(){
+
+let file=document.getElementById("foto").files[0];
+
+if(!file){
+ alert("Seleccione una imagen");
+ return;
 }
+
+
+let img=document.getElementById("preview");
+img.src=URL.createObjectURL(file);
+img.style.display="block";
+
+
+document.getElementById("estado").innerHTML="Procesando OCR...";
+
+
+let result=await Tesseract.recognize(file,"eng");
+
+
+document.getElementById("ocr").value=result.data.text;
+
+
+analizarDatos(result.data.text);
+
+}
+
 
 function guardar(){
-let obj={
-marca:marca.value,
-modelo:modelo.value,
-tag:tag.value,
-serial:serial.value,
-mac:mac.value,
-fecha:fecha.value,
-express:express.value,
-activo:activo.value,
-usuario:usuario.value,
-ubicacion:ubicacion.value
-};
 
-inventario.push(obj);
-mostrar();
-}
+let item={};
 
-function mostrar(){
-tabla.innerHTML="<tr><th>Marca</th><th>Modelo</th><th>Serial</th><th>Tag</th></tr>";
-inventario.forEach(x=>{
-tabla.innerHTML+=`<tr><td>${x.marca}</td><td>${x.modelo}</td><td>${x.serial}</td><td>${x.tag}</td></tr>`;
+ids.forEach(i=>{
+ item[i]=document.getElementById(i).value;
 });
+
+item.fecha=new Date().toLocaleString();
+
+
+if(!item.serial && !item.tag && !item.activo){
+ alert("Debe existir Serial, Service Tag o Código activo");
+ return;
 }
 
-function csv(){
-let txt="Marca;Modelo;Serial;Tag\n";
-inventario.forEach(x=>txt+=`${x.marca};${x.modelo};${x.serial};${x.tag}\n`);
-let a=document.createElement("a");
-a.href=URL.createObjectURL(new Blob([txt]));
-a.download="inventario_monitores.csv";
-a.click();
+
+inventario.push(item);
+
+render();
+
+alert("Activo guardado correctamente");
+
 }
+
+
+function render(){
+
+let html="<tr><th>Marca</th><th>Modelo</th><th>Serial</th><th>Usuario</th><th>Ubicación</th></tr>";
+
+inventario.forEach(x=>{
+ html+=`
+<tr>
+<td>${x.marca}</td>
+<td>${x.modelo}</td>
+<td>${x.serial}</td>
+<td>${x.usuario}</td>
+<td>${x.ubicacion}</td>
+</tr>`;
+});
+
+document.getElementById("tabla").innerHTML=html;
+
+}
+
+
+function exportar(){
+
+let csv="Marca;Modelo;Serial;Service Tag;Usuario;Area;Sede;Ubicacion;Estado\n";
+
+inventario.forEach(x=>{
+csv+=`${x.marca};${x.modelo};${x.serial};${x.tag};${x.usuario};${x.area};${x.sede};${x.ubicacion};${x.estadoActivo}\n`;
+});
+
+
+let a=document.createElement("a");
+
+a.href=URL.createObjectURL(new Blob([csv]));
+
+a.download="inventario_monitores.csv";
+
+a.click();
+
+}
+
 </script>
+
 </body>
 </html>
