@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#7A0019">
+<title>Inventario de Monitores - Dell / Samsung</title>
+<style>
+:root{
+  --wine:#7A0019;--wine2:#590013;--bg:#f4f5f7;--card:#fff;--text:#17202a;
+  --muted:#667085;--border:#d7dce2;--ok:#157347;--warn:#956000;--danger:#b42318;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
+header{position:sticky;top:0;z-index:10;background:linear-gradient(135deg,var(--wine),var(--wine2));color:white;padding:13px 16px}
+header h1{font-size:18px;margin:0} header p{font-size:12px;margin:4px 0 0;opacity:.9}
+main{max-width:980px;margin:auto;padding:13px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px}
+h2{font-size:16px;margin:0 0 8px}.sub{font-size:12px;color:var(--muted);line-height:1.45;margin:0 0 10px}
+.grid{display:grid;grid-template-columns:1fr;gap:12px}
+@media(min-width:760px){.grid.two{grid-template-columns:1fr 1fr}}
+.row{display:grid;grid-template-columns:1fr;gap:9px}
+@media(min-width:650px){.row.two{grid-template-columns:1fr 1fr}.row.three{grid-template-columns:1fr 1fr 1fr}}
+label{display:block;font-size:12px;font-weight:700;margin:9px 0 5px}
+input,select,textarea{width:100%;min-height:44px;border:1px solid var(--border);border-radius:10px;padding:10px 11px;font-size:16px;background:white;color:var(--text)}
+textarea{min-height:70px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--wine);box-shadow:0 0 0 3px rgba(122,0,25,.10)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+button,.filebtn{min-height:44px;border-radius:10px;padding:9px 13px;border:1px solid transparent;font-size:14px;font-weight:700;cursor:pointer}
+.primary{background:var(--wine);color:#fff}.secondary{background:#fff;border-color:var(--border);color:var(--text)}
+.success{background:#eaf7ef;border-color:#bae1ca;color:var(--ok)}.danger{background:#fff0ef;border-color:#ecc4c0;color:var(--danger)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.hidden{display:none!important}
+.status{font-size:12px;margin-top:9px;border-radius:9px;padding:8px 10px;background:#eef1f4;color:#3e4855}
+.status.ok{background:#eaf7ef;color:var(--ok)}.status.warn{background:#fff5e4;color:var(--warn)}.status.err{background:#fff0ef;color:var(--danger)}
+#reader{width:100%;border-radius:12px;overflow:hidden;background:#101010}
+.preview{width:100%;max-height:290px;object-fit:contain;border:1px solid var(--border);border-radius:10px;background:#fafafa}
+.info{padding:9px 10px;background:#f7f8fa;border-left:4px solid var(--wine);font-size:12px;line-height:1.45;border-radius:6px}
+.pills{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.pill{font-size:11px;padding:4px 8px;border-radius:999px;background:#eef1f4}
+.tablewrap{overflow:auto;border:1px solid var(--border);border-radius:10px;margin-top:10px}
+table{border-collapse:collapse;min-width:1180px;width:100%;font-size:12px}
+th,td{padding:8px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
+th{background:#f3f5f7;position:sticky;top:0}
+.count{font-weight:800;color:var(--wine)}.mini{font-size:11px;color:var(--muted)}
+details{margin-top:9px}summary{font-size:12px;color:var(--muted);cursor:pointer}
+hr{border:0;border-top:1px solid var(--border);margin:12px 0}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+</head>
+<body>
+<header>
+  <h1>Inventario rápido de monitores</h1>
+  <p>Dell / Samsung · Data Matrix + QR + OCR</p>
+</header>
+
+<main>
+  <div class="info">
+    Para monitores Dell, el identificador más útil suele ser el <b>Service Tag</b>. La app también registra S/N, modelo,
+    MAC, Express Service Code y fecha de fabricación. Si existe un código de activo interno de la empresa, puedes añadirlo aparte.
+  </div>
+
+  <div class="grid two" style="margin-top:12px">
+    <section class="card">
+      <h2>1. Escanear código de la etiqueta</h2>
+      <p class="sub">Admite Data Matrix, QR, Code 128 y Code 39. Puedes leer uno o varios códigos de la misma etiqueta.</p>
+      <div id="reader"></div>
+      <div class="actions">
+        <button id="startScan" class="primary" type="button">Iniciar cámara</button>
+        <button id="stopScan" class="secondary" type="button" disabled>Detener</button>
+        <label class="filebtn secondary" for="codeImage" style="display:inline-flex;align-items:center;margin:0">Leer desde foto</label>
+        <input id="codeImage" class="hidden" type="file" accept="image/*">
+      </div>
+      <label for="decoded">Última lectura</label>
+      <textarea id="decoded" placeholder="Aquí aparecerá el contenido del código escaneado."></textarea>
+      <div class="actions">
+        <button id="processDecoded" class="secondary" type="button">Procesar lectura</button>
+      </div>
+      <div id="scanStatus" class="status">Listo para escanear.</div>
+      <div id="readPills" class="pills"></div>
+    </section>
+
+    <section class="card">
+      <h2>2. Fotografiar toda la etiqueta</h2>
+      <p class="sub">Para Dell, la lectura OCR está ajustada a etiquetas oscuras con texto claro como la que enviaste.</p>
+      <label class="filebtn primary" for="labelPhoto" style="display:inline-flex;align-items:center;margin:0">Tomar / cargar foto</label>
+      <input id="labelPhoto" class="hidden" type="file" accept="image/*" capture="environment">
+      <div id="previewBox" class="hidden" style="margin-top:10px">
+        <img id="preview" class="preview" alt="Vista previa de la etiqueta">
+      </div>
+      <div class="actions">
+        <button id="runOcr" class="secondary" type="button" disabled>Leer etiqueta</button>
+      </div>
+      <div id="ocrStatus" class="status">Aún no hay una fotografía cargada.</div>
+      <details>
+        <summary>Ver texto reconocido</summary>
+        <textarea id="ocrRaw" readonly style="margin-top:7px"></textarea>
+      </details>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>3. Validar datos del monitor</h2>
+    <form id="form">
+      <div class="row three">
+        <div>
+          <label for="brand">Marca</label>
+          <select id="brand">
+            <option value="DELL">DELL</option>
+            <option value="SAMSUNG">SAMSUNG</option>
+            <option value="OTRO">OTRO</option>
+          </select>
+        </div>
+        <div>
+          <label for="model">Modelo</label>
+          <input id="model" placeholder="Ej. P2422HE">
+        </div>
+        <div>
+          <label for="size">Tamaño</label>
+          <input id="size" placeholder='Ej. 24"'>
+        </div>
+      </div>
+
+      <div class="row three">
+        <div>
+          <label for="serviceTag">Service Tag / ID fabricante</label>
+          <input id="serviceTag" placeholder="Dell: ej. D19CT03">
+        </div>
+        <div>
+          <label for="serial">S/N / Número de serie</label>
+          <input id="serial" placeholder="Número de serie">
+        </div>
+        <div>
+          <label for="express">Express Service Code</label>
+          <input id="express" placeholder="Dell">
+        </div>
+      </div>
+
+      <div class="row three">
+        <div>
+          <label for="mac">MAC Address</label>
+          <input id="mac" placeholder="Ej. 7486E2FF121E">
+        </div>
+        <div>
+          <label for="mfg">Fecha fabricación</label>
+          <input id="mfg" placeholder="Ej. January 2024">
+        </div>
+        <div>
+          <label for="asset">Código activo interno</label>
+          <input id="asset" placeholder="Etiqueta patrimonial / QR interno">
+        </div>
+      </div>
+
+      <hr>
+
+      <div class="row three">
+        <div>
+          <label for="user">Usuario / responsable</label>
+          <input id="user" placeholder="Usuario asignado">
+        </div>
+        <div>
+          <label for="area">Área</label>
+          <input id="area" placeholder="TI, Comercial, Finanzas...">
+        </div>
+        <div>
+          <label for="location">Ubicación</label>
+          <input id="location" placeholder="Sede / piso / oficina">
+        </div>
+      </div>
+
+      <div class="row two">
+        <div>
+          <label for="state">Estado</label>
+          <select id="state">
+            <option>Operativo</option>
+            <option>Observado</option>
+            <option>En reparación</option>
+            <option>En almacén</option>
+            <option>Baja</option>
+          </select>
+        </div>
+        <div>
+          <label for="notes">Observaciones</label>
+          <input id="notes" placeholder="Base, cables, daño físico, etc.">
+        </div>
+      </div>
+
+      <input id="rawCodes" type="hidden">
+
+      <div class="actions">
+        <button class="primary" type="submit">Guardar y siguiente</button>
+        <button id="clearTechnical" class="secondary" type="button">Limpiar monitor</button>
+        <button id="clearAllForm" class="secondary" type="button">Limpiar todo</button>
+      </div>
+      <div id="formStatus" class="status">Para guardar, debe existir al menos Service Tag, S/N o código de activo interno.</div>
+    </form>
+  </section>
+
+  <section class="card">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
+      <div>
+        <h2 style="margin-bottom:3px">Registros capturados</h2>
+        <span class="mini">Total: <span id="count" class="count">0</span></span>
+      </div>
+      <div class="actions" style="margin:0">
+        <button id="csv" class="success" type="button">Exportar CSV</button>
+        <button id="json" class="secondary" type="button">Respaldar JSON</button>
+        <button id="wipe" class="danger" type="button">Borrar inventario</button>
+      </div>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha</th><th>Marca</th><th>Modelo</th><th>Service Tag</th><th>S/N</th>
+            <th>MAC</th><th>Fabricación</th><th>Activo interno</th><th>Usuario</th><th>Área</th>
+            <th>Ubicación</th><th>Estado</th><th>Acción</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const STORE = "monitor_inventory_dell_samsung_v2";
+  const ids = ["brand","model","size","serviceTag","serial","express","mac","mfg","asset","user","area","location","state","notes","rawCodes"];
+  const f = Object.fromEntries(ids.map(id => [id,$(id)]));
+
+  let data = [];
+  let scanner = null;
+  let photoFile = null;
+  let reads = [];
+
+  function status(el,msg,type=""){ el.textContent=msg; el.className="status"+(type?" "+type:""); }
+  function clean(v){ return (v||"").toString().trim(); }
+  function up(v){ return clean(v).toUpperCase(); }
+  function esc(v){ return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c])); }
+
+  function load(){
+    try{ data=JSON.parse(localStorage.getItem(STORE)||"[]"); if(!Array.isArray(data)) data=[]; }catch{data=[]}
+    render();
+  }
+  function save(){ localStorage.setItem(STORE,JSON.stringify(data)); render(); }
+
+  function render(){
+    $("count").textContent=data.length;
+    $("rows").innerHTML=data.map((r,i)=>`
+      <tr>
+        <td>${esc(r.fecha)}</td><td>${esc(r.marca)}</td><td><b>${esc(r.modelo)}</b></td>
+        <td>${esc(r.serviceTag)}</td><td>${esc(r.serial)}</td><td>${esc(r.mac)}</td>
+        <td>${esc(r.fabricacion)}</td><td>${esc(r.activo)}</td><td>${esc(r.usuario)}</td>
+        <td>${esc(r.area)}</td><td>${esc(r.ubicacion)}</td><td>${esc(r.estado)}</td>
+        <td><button type="button" class="secondary del" data-i="${i}" style="min-height:34px;padding:5px 8px">Eliminar</button></td>
+      </tr>`).join("");
+    document.querySelectorAll(".del").forEach(b=>b.addEventListener("click",()=>{
+      const i=Number(b.dataset.i); if(Number.isInteger(i)&&data[i]){data.splice(i,1);save();}
+    }));
+  }
+
+  function addRead(text){
+    const v=clean(text);
+    if(!v) return;
+    if(!reads.includes(v)) reads.push(v);
+    f.rawCodes.value=reads.join(" || ");
+    $("readPills").innerHTML=reads.map(x=>`<span class="pill">${esc(x.slice(0,48))}${x.length>48?"…":""}</span>`).join("");
+  }
+
+  function formatMac(raw){
+    const x=up(raw).replace(/[^A-F0-9]/g,"");
+    return x.length===12 ? x : up(raw);
+  }
+
+  function inferBrand(t){
+    const U=up(t);
+    if(U.includes("DELL")) f.brand.value="DELL";
+    else if(U.includes("SAMSUNG")) f.brand.value="SAMSUNG";
+  }
+
+  function parseAny(text, source="código"){
+    let t=clean(text);
+    if(!t) return;
+    addRead(t);
+    inferBrand(t);
+    const U=up(t).replace(/\r/g,"\n");
+
+    // MAC
+    let m=U.match(/(?:MAC(?:\s*ADDRESS)?\s*[:#]?\s*)?([0-9A-F]{2}(?:[:-]?[0-9A-F]{2}){5})\b/);
+    if(m && !f.mac.value) f.mac.value=formatMac(m[1]);
+
+    // Dell Service Tag explícito
+    m=U.match(/(?:SVC\s*TAG|SERVICE\s*TAG)\s*[:#]?\s*([A-Z0-9]{5,10})\b/);
+    if(m) f.serviceTag.value=m[1];
+
+    // Express Service Code
+    m=U.match(/(?:EXPRESS\s*SERVICE\s*CODE)\s*[:#]?\s*([0-9][0-9\s-]{7,18})/);
+    if(m && !f.express.value) f.express.value=m[1].replace(/\s+/g," ").trim();
+
+    // Serial / S/N
+    const serialRegexes=[
+      /(?:S\/N|SERIAL(?:\s*(?:NO|NUMBER))?|SER\.?\s*NO\.?)\s*[:#]?\s*([A-Z0-9][A-Z0-9._/-]{5,45})/i,
+      /\b(TH-[A-Z0-9-]{15,45})\b/i,
+      /\b(CN-[A-Z0-9-]{15,45})\b/i
+    ];
+    for(const rx of serialRegexes){
+      const sm=U.match(rx); if(sm){ if(!f.serial.value) f.serial.value=sm[1]; break; }
+    }
+
+    // Dell model: P2422HE / U2723QE / etc.
+    let mm=U.match(/\b([PUSCEG][1-9][0-9]{3}[A-Z]{0,4})\b/);
+    if(mm && !f.model.value) f.model.value=mm[1];
+
+    // Generic / Samsung model code
+    if(!f.model.value){
+      mm=U.match(/(?:MODEL(?:\s*CODE)?|MODELO|TYPE\s*NO)\s*[:#.-]?\s*([A-Z0-9][A-Z0-9._/-]{3,30})/i);
+      if(mm) f.model.value=mm[1];
+    }
+
+    // Samsung common model codes LS24..., LF27...
+    if(!f.model.value){
+      mm=U.match(/\b(L[A-Z][0-9]{2}[A-Z0-9]{3,20})\b/);
+      if(mm) f.model.value=mm[1];
+    }
+
+    // Manufacturing date
+    let dm=U.match(/(?:DATE\s*OF\s*MFG|MFG\s*DATE|MANUFACTURED|MFD)\s*[:#]?\s*([A-Z]+\s+[0-9]{4}|[0-9]{4}[./-][0-9]{1,2}(?:[./-][0-9]{1,2})?)/i);
+    if(dm && !f.mfg.value) f.mfg.value=dm[1];
+
+    // If a standalone scan is a likely Dell service tag (7 alphanumeric)
+    const compact=U.replace(/\s/g,"");
+    if(f.brand.value==="DELL" && /^[A-Z0-9]{7}$/.test(compact) && !f.serviceTag.value){
+      f.serviceTag.value=compact;
+    }
+
+    // Standalone long serial-like payload
+    if(/^[A-Z0-9._/-]{12,50}$/.test(compact) && !f.serial.value && compact!==formatMac(compact)){
+      if(compact.includes("-") || compact.length>15) f.serial.value=compact;
+    }
+
+    status($("scanStatus"),`Lectura procesada desde ${source}. Revisa los campos detectados.`,"ok");
+  }
+
+  function supportedFormats(){
+    if(typeof Html5QrcodeSupportedFormats==="undefined") return undefined;
+    return [
+      Html5QrcodeSupportedFormats.DATA_MATRIX,
+      Html5QrcodeSupportedFormats.QR_CODE,
+      Html5QrcodeSupportedFormats.CODE_128,
+      Html5QrcodeSupportedFormats.CODE_39
+    ];
+  }
+
+  async function startScan(){
+    if(typeof Html5Qrcode==="undefined"){status($("scanStatus"),"No cargó el lector de códigos. Verifica Internet.","err");return}
+    try{
+      if(!scanner){
+        const formats=supportedFormats();
+        scanner=formats?new Html5Qrcode("reader",{formatsToSupport:formats}):new Html5Qrcode("reader");
+      }
+      const cams=await Html5Qrcode.getCameras();
+      if(!cams.length) throw new Error("No se detectó cámara");
+      const cam=cams.find(x=>/back|rear|environment|trasera/i.test(x.label))||cams[cams.length-1];
+      await scanner.start(cam.id,{fps:10,qrbox:{width:260,height:200}},decoded=>{
+        $("decoded").value=decoded;
+        parseAny(decoded,"cámara");
+        if(navigator.vibrate) navigator.vibrate(70);
+      },()=>{});
+      $("startScan").disabled=true;$("stopScan").disabled=false;
+      status($("scanStatus"),"Cámara activa. Acerca uno de los códigos de la etiqueta.","ok");
+    }catch(e){
+      status($("scanStatus"),"No se pudo abrir la cámara. Usa HTTPS/localhost o carga una fotografía. "+(e.message||e),"err");
+    }
+  }
+
+  async function stopScan(){
+    try{if(scanner&&scanner.isScanning) await scanner.stop()}catch{}
+    $("startScan").disabled=false;$("stopScan").disabled=true;
+    status($("scanStatus"),"Cámara detenida.");
+  }
+
+  $("startScan").addEventListener("click",startScan);
+  $("stopScan").addEventListener("click",stopScan);
+  $("processDecoded").addEventListener("click",()=>parseAny($("decoded").value,"texto"));
+
+  $("codeImage").addEventListener("change",async e=>{
+    const file=e.target.files?.[0]; if(!file)return;
+    if(typeof Html5Qrcode==="undefined"){status($("scanStatus"),"No cargó el lector de códigos.","err");return}
+    try{
+      if(!scanner){
+        const formats=supportedFormats();
+        scanner=formats?new Html5Qrcode("reader",{formatsToSupport:formats}):new Html5Qrcode("reader");
+      }
+      if(scanner.isScanning) await scanner.stop();
+      const decoded=await scanner.scanFile(file,true);
+      $("decoded").value=decoded; parseAny(decoded,"fotografía");
+    }catch{
+      status($("scanStatus"),"No se pudo detectar un código en esa foto. Prueba una toma más cercana y perpendicular.","err");
+    }finally{
+      e.target.value="";$("startScan").disabled=false;$("stopScan").disabled=true;
+    }
+  });
+
+  $("labelPhoto").addEventListener("change",e=>{
+    photoFile=e.target.files?.[0]||null;
+    if(!photoFile)return;
+    $("preview").src=URL.createObjectURL(photoFile);
+    $("previewBox").classList.remove("hidden");
+    $("runOcr").disabled=false;
+    status($("ocrStatus"),"Foto lista. Pulsa “Leer etiqueta”.");
+  });
+
+  async function preprocessImage(file){
+    const bitmap=await createImageBitmap(file);
+    const maxW=1800;
+    const scale=Math.min(1,maxW/bitmap.width);
+    const w=Math.max(1,Math.round(bitmap.width*scale));
+    const h=Math.max(1,Math.round(bitmap.height*scale));
+    const canvas=document.createElement("canvas");canvas.width=w;canvas.height=h;
+    const ctx=canvas.getContext("2d",{willReadFrequently:true});
+    ctx.drawImage(bitmap,0,0,w,h);
+    const im=ctx.getImageData(0,0,w,h),d=im.data;
+    let avg=0;
+    for(let i=0;i<d.length;i+=4) avg+=(d[i]+d[i+1]+d[i+2])/3;
+    avg/=d.length/4;
+    const invert=avg<135;
+    for(let i=0;i<d.length;i+=4){
+      let g=.299*d[i]+.587*d[i+1]+.114*d[i+2];
+      if(invert) g=255-g;
+      // contrast + light threshold blend, keeps small characters readable
+      g=Math.max(0,Math.min(255,(g-128)*1.65+128));
+      const out=g>185?255:(g<65?0:g);
+      d[i]=d[i+1]=d[i+2]=out;
+    }
+    ctx.putImageData(im,0,0);
+    return canvas;
+  }
+
+  function parseOcr(text){
+    inferBrand(text);
+    const U=up(text).replace(/[|]/g," ").replace(/\r/g,"\n");
+
+    // Normalize common OCR punctuation around labels
+    parseAny(U,"OCR");
+
+    // Dell model often appears twice and may be surrounded by Chinese text
+    if(f.brand.value==="DELL" && !f.model.value){
+      const mm=U.match(/\b(P[0-9]{4}[A-Z]{0,4})\b/); if(mm)f.model.value=mm[1];
+    }
+
+    // Service Tag can be OCR'd without space
+    if(!f.serviceTag.value){
+      const st=U.match(/SVC\s*TAG\s*[:.]?\s*([A-Z0-9]{7})/);
+      if(st)f.serviceTag.value=st[1];
+    }
+
+    // Express code accepts split digits
+    if(!f.express.value){
+      const ex=U.match(/EXPRESS\s*SERVICE\s*CODE\s*[:.]?\s*([\d\s]{9,18})/);
+      if(ex)f.express.value=ex[1].replace(/\s+/g," ").trim();
+    }
+
+    // Date of Mfg such as January 2024
+    if(!f.mfg.value){
+      const dt=U.match(/DATE\s*OF\s*MFG[^A-Z0-9]{0,20}([A-Z]{3,12}\s+[12][0-9]{3})/);
+      if(dt)f.mfg.value=dt[1].replace(/\b([A-Z])([A-Z]+)\b/g,(x,a,b)=>a+b.toLowerCase());
+    }
+
+    // Size inferred from common monitor model prefix number: P2422HE => ~24
+    if(!f.size.value && f.model.value){
+      const sz=f.model.value.match(/^[A-Z]+([0-9]{2})/);
+      if(sz && Number(sz[1])>=17 && Number(sz[1])<=49) f.size.value=sz[1]+'"';
+    }
+  }
+
+  $("runOcr").addEventListener("click",async()=>{
+    if(!photoFile)return;
+    if(typeof Tesseract==="undefined"){status($("ocrStatus"),"No cargó el motor OCR. Verifica Internet.","err");return}
+    $("runOcr").disabled=true;
+    try{
+      status($("ocrStatus"),"Preparando imagen…");
+      let source=photoFile;
+      try{source=await preprocessImage(photoFile)}catch{}
+      const res=await Tesseract.recognize(source,"eng",{
+        logger:m=>{
+          if(m.status==="recognizing text"&&typeof m.progress==="number")
+            status($("ocrStatus"),`Leyendo etiqueta… ${Math.round(m.progress*100)}%`);
+        }
+      });
+      const text=res?.data?.text||"";
+      $("ocrRaw").value=text;
+      parseOcr(text);
+      status($("ocrStatus"),"Etiqueta procesada. Confirma los datos antes de guardar.","ok");
+    }catch(e){
+      status($("ocrStatus"),"No se pudo leer la etiqueta. Intenta con más luz, sin reflejos y enfocando de frente.","err");
+    }finally{$("runOcr").disabled=false}
+  });
+
+  function clearTechnical(){
+    ["model","size","serviceTag","serial","express","mac","mfg","asset","notes","rawCodes"].forEach(k=>f[k].value="");
+    f.brand.value="DELL";
+    reads=[];$("readPills").innerHTML="";$("decoded").value="";$("ocrRaw").value="";
+    $("labelPhoto").value="";photoFile=null;$("previewBox").classList.add("hidden");$("runOcr").disabled=true;
+    status($("scanStatus"),"Listo para escanear.");status($("ocrStatus"),"Aún no hay una fotografía cargada.");
+  }
+  function clearAll(){
+    clearTechnical();
+    ["user","area","location"].forEach(k=>f[k].value="");f.state.value="Operativo";
+  }
+  $("clearTechnical").addEventListener("click",clearTechnical);
+  $("clearAllForm").addEventListener("click",clearAll);
+
+  $("form").addEventListener("submit",e=>{
+    e.preventDefault();
+    const st=up(f.serviceTag.value), sn=up(f.serial.value), asset=up(f.asset.value);
+    if(!st&&!sn&&!asset){
+      status($("formStatus"),"Falta un identificador único: Service Tag, S/N o código de activo interno.","err");return;
+    }
+    const dup=data.find(r=>
+      (st&&up(r.serviceTag)===st) || (sn&&up(r.serial)===sn) || (asset&&up(r.activo)===asset)
+    );
+    if(dup&&!confirm(`Posible duplicado:\n${dup.marca} ${dup.modelo}\nService Tag: ${dup.serviceTag||"-"}\nS/N: ${dup.serial||"-"}\n\n¿Guardar de todos modos?`)) return;
+
+    const now=new Date();
+    const rec={
+      fecha:now.toLocaleString("es-PE"),fechaISO:now.toISOString(),
+      marca:f.brand.value,modelo:up(f.model.value),tamano:clean(f.size.value),
+      serviceTag:st,serial:sn,express:clean(f.express.value),mac:formatMac(f.mac.value),
+      fabricacion:clean(f.mfg.value),activo:asset,usuario:clean(f.user.value),area:clean(f.area.value),
+      ubicacion:clean(f.location.value),estado:f.state.value,observaciones:clean(f.notes.value),
+      codigos:clean(f.rawCodes.value)
+    };
+    data.unshift(rec);save();
+    const id=st||sn||asset;
+    clearTechnical(); // mantiene usuario/área/ubicación para trabajo por zona
+    status($("formStatus"),`Monitor ${id} guardado. Usuario, área y ubicación se conservaron para acelerar el siguiente registro.`,"ok");
+  });
+
+  function csvCell(v){return '"'+String(v??"").replace(/"/g,'""')+'"'}
+  function download(name,body,type){
+    const blob=new Blob([body],{type});const u=URL.createObjectURL(blob);const a=document.createElement("a");
+    a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),800);
+  }
+  $("csv").addEventListener("click",()=>{
+    if(!data.length){status($("formStatus"),"No hay registros para exportar.","warn");return}
+    const h=["Fecha","Marca","Modelo","Tamano","ServiceTag","Serial","ExpressServiceCode","MAC","FechaFabricacion","CodigoActivoInterno","Usuario","Area","Ubicacion","Estado","Observaciones","CodigosLeidos"];
+    const rows=data.map(r=>[r.fecha,r.marca,r.modelo,r.tamano,r.serviceTag,r.serial,r.express,r.mac,r.fabricacion,r.activo,r.usuario,r.area,r.ubicacion,r.estado,r.observaciones,r.codigos]);
+    const csv="\uFEFF"+[h,...rows].map(x=>x.map(csvCell).join(";")).join("\r\n");
+    download(`inventario_monitores_${new Date().toISOString().slice(0,10)}.csv`,csv,"text/csv;charset=utf-8");
+  });
+  $("json").addEventListener("click",()=>{
+    if(data.length)download(`inventario_monitores_${new Date().toISOString().slice(0,10)}.json`,JSON.stringify(data,null,2),"application/json");
+  });
+  $("wipe").addEventListener("click",()=>{
+    if(data.length&&confirm("¿Borrar todos los registros guardados en este navegador?")){data=[];save();status($("formStatus"),"Inventario local eliminado.","warn")}
+  });
+
+  load();
+})();
+</script>
+</body>
+</html>
