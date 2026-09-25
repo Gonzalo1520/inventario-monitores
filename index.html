@@ -3,223 +3,128 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Dell Smart Scanner V4 Chinese Filter</title>
+<title>Dell Scanner V5</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
 body{font-family:Arial;background:#0f172a;color:white;padding:15px}
 .card{background:#1e293b;padding:18px;border-radius:16px;margin-bottom:15px}
 video{width:100%;border-radius:12px;background:#000}
 button{width:100%;padding:15px;margin-top:10px;background:#0076ce;color:white;border:0;border-radius:12px;font-size:17px}
-.field{background:#111827;padding:10px;border-radius:8px;margin:8px 0}
-.ok{color:#22c55e}
+input{width:100%;padding:12px;margin:5px 0;background:#111827;color:white;border:0;border-radius:8px}
+label{color:#94a3b8;font-size:13px}
 </style>
 </head>
-
 <body>
 
 <h2>Inventario Monitores Dell</h2>
 
 <div class="card">
 <video id="video" autoplay playsinline></video>
-<button onclick="openCamera()">Abrir cámara</button>
-<button onclick="scan()">Capturar etiqueta Dell</button>
+<button onclick="camera()">Abrir cámara</button>
+<button onclick="scan()">Capturar y analizar</button>
+<canvas id="canvas" hidden></canvas>
 </div>
 
 <div class="card">
-<h3>Resultado validado</h3>
-<div id="result">Esperando captura...</div>
+<h3>Datos encontrados</h3>
+
+<label>Marca</label><input id="marca">
+<label>Modelo</label><input id="modelo">
+<label>Service Tag</label><input id="svc">
+<label>Serial Number</label><input id="serial">
+<label>Express Code</label><input id="express">
+<label>Date Of Mfg</label><input id="fecha">
+<label>MAC Address</label><input id="mac">
+
+<button onclick="guardar()">Guardar</button>
+
+<p id="estado"></p>
 </div>
 
 <script>
 
-async function openCamera(){
-let stream=await navigator.mediaDevices.getUserMedia({
+let video=document.getElementById("video");
+let canvas=document.getElementById("canvas");
+
+async function camera(){
+let s=await navigator.mediaDevices.getUserMedia({
 video:{facingMode:"environment"}
 });
-video.srcObject=stream;
+video.srcObject=s;
 }
 
 
-/*
-====================================================
-FILTRO DELL
-====================================================
+async function scan(){
 
-Elimina:
-- Chino
-- Japonés
-- Coreano
-- Símbolos Unicode
+canvas.width=video.videoWidth;
+canvas.height=video.videoHeight;
 
-Mantiene:
-A-Z
-0-9
--
-:
-,
-espacios
+canvas.getContext("2d").drawImage(video,0,0);
 
-*/
+estado.innerHTML="Procesando OCR real...";
 
-function cleanDellText(text){
+let r=await Tesseract.recognize(canvas,"eng");
 
-return text
-.replace(/[\u3400-\u9FFF]/g,'')
-.replace(/[^\x00-\x7F]/g,'')
-.replace(/\s+/g,' ')
+let text=filterDell(r.data.text);
+
+parse(text);
+
+estado.innerHTML="OCR completado. Revisar campos y confirmar.";
+
+}
+
+
+function filterDell(t){
+
+return t
+.replace(/[\u3400-\u9FFF]/g,"")
+.replace(/[^\x00-\x7F]/g,"")
 .toUpperCase();
 
 }
 
 
-/*
-Correcciones OCR comunes Dell
-*/
+function parse(t){
 
-function correctOCR(text){
+let modelo=t.match(/[PUS][0-9]{4}[A-Z]{1,3}/);
 
-return text
-.replace(/O/g,"0")
-.replace(/[IL]/g,"1")
-.replace(/S/g,"5")
-.replace(/B/g,"8");
+let serial=t.match(/TH-[A-Z0-9-]{15,40}/);
 
-}
+let mac=t.match(/[A-F0-9]{12}/);
 
+let express=t.replace(/\s/g,"").match(/[0-9]{10,12}/);
 
-/*
-Validadores Dell
-*/
+let svc=t.match(/SVC\s*TAG\s*:?\s*([A-Z0-9]{7})/);
 
-function validateModel(text){
-
-let match=text.match(/[PUS][0-9]{4}[A-Z]{1,3}/);
-return match ? match[0] : "No detectado";
-
-}
+let fecha=t.match(/DATE OF MFG.*?([A-Z]+\s*,?\s*\d{4})/);
 
 
-function validateServiceTag(text,model){
-
-let values=text.match(/[A-Z0-9]{7}/g)||[];
-
-let valid=values.find(x=>x!==model);
-
-return valid || "No detectado";
+marca.value="DELL";
+modelo.value=modelo?modelo[0]:"";
+svc.value=svc?svc[1]:"";
+serial.value=serial?serial[0]:"";
+express.value=express?express[0]:"";
+mac.value=mac?mac[0]:"";
+fecha.value=fecha?fecha[1]:"";
 
 }
 
 
-function validateSerial(text){
+function guardar(){
 
-let match=text.match(/TH-[A-Z0-9-]{15,30}/);
-
-return match ? match[0] : "No detectado";
-
-}
-
-
-function validateMAC(text){
-
-let match=text.match(/[A-F0-9]{12}/);
-
-return match ? match[0] : "No detectado";
-
-}
-
-
-function validateExpress(text){
-
-let match=text.replace(/\s/g,'').match(/\d{10,12}/);
-
-return match ? match[0] : "No detectado";
-
-}
-
-
-/*
-Simulación del OCR segmentado Dell
-
-En la versión final:
-cada región roja será procesada
-por separado:
-- Modelo
-- Date
-- SVC Tag
-- Serial
-- Express
-- MAC
-
-*/
-
-function scan(){
-
-let ocrRaw=`
-DELL
-
-型号:P2422HE
-
-Date of Mfg/生产日期:
-January, 2024
-
-MAC address:7486E2FF121E
-
-SVC Tag:
-D19CTX3
-
-S/N:
-TH-01CBXN-TVH00-41P-1WSB-A06
-
-Express Service Code:
-28374351735
-`;
-
-
-let clean=correctOCR(cleanDellText(ocrRaw));
-
-
-let modelo=validateModel(clean);
-
-let resultado={
-
-marca:"DELL",
-
-modelo:modelo,
-
-service:validateServiceTag(clean,modelo),
-
-serial:validateSerial(clean),
-
-express:validateExpress(clean),
-
-fecha:"January, 2024",
-
-mac:validateMAC(clean)
-
+let data={
+marca:marca.value,
+modelo:modelo.value,
+service:svc.value,
+serial:serial.value,
+express:express.value,
+fecha:fecha.value,
+mac:mac.value
 };
 
+localStorage.setItem("dell_inventory_last",JSON.stringify(data));
 
-mostrar(resultado);
-
-}
-
-
-function mostrar(d){
-
-result.innerHTML=`
-
-<div class="field">Marca: ${d.marca}</div>
-<div class="field">Modelo: ${d.modelo}</div>
-<div class="field">Service Tag: ${d.service}</div>
-<div class="field">Serial Number: ${d.serial}</div>
-<div class="field">Express Code: ${d.express}</div>
-<div class="field">Date Of Mfg: ${d.fecha}</div>
-<div class="field">MAC Address: ${d.mac}</div>
-
-<p class="ok">
-Filtro chino aplicado + validación Dell
-</p>
-
-`;
+estado.innerHTML="Guardado correctamente";
 
 }
 
