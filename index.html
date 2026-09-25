@@ -3,490 +3,156 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Inventario de Monitores</title>
-
+<title>Inventario Monitores V6</title>
 <style>
-:root{
- --wine:#7a0019;
- --wine-dark:#520012;
- --bg:#f4f6f8;
- --card:#fff;
- --border:#d9dee5;
- --text:#1f2937;
- --muted:#667085;
- --success:#067647;
-}
-
+:root{--wine:#7a0019;--bg:#f4f6f8;--card:#fff}
 *{box-sizing:border-box}
-
-body{
- margin:0;
- font-family:"Segoe UI",Arial,sans-serif;
- background:var(--bg);
- color:var(--text);
-}
-
-header{
- background:linear-gradient(135deg,var(--wine),var(--wine-dark));
- color:white;
- padding:22px;
-}
-
-header h1{
- margin:0;
- font-size:24px;
-}
-
-header p{
- margin:5px 0 0;
- opacity:.9;
-}
-
-.container{
- max-width:1000px;
- margin:auto;
- padding:20px;
-}
-
-.card{
- background:var(--card);
- border-radius:16px;
- padding:20px;
- margin-bottom:18px;
- box-shadow:0 5px 18px rgba(0,0,0,.08);
-}
-
-.title{
- font-size:18px;
- font-weight:700;
- margin-bottom:15px;
-}
-
-.grid{
- display:grid;
- grid-template-columns:repeat(2,1fr);
- gap:14px;
-}
-
-.field label{
- display:block;
- font-size:12px;
- font-weight:700;
- color:var(--muted);
- margin-bottom:5px;
-}
-
-input,select,textarea{
- width:100%;
- padding:12px;
- border-radius:10px;
- border:1px solid var(--border);
- font-size:14px;
-}
-
-.auto{
- background:#f2f4f7;
-}
-
-textarea{
- min-height:90px;
- resize:none;
-}
-
-button{
- width:100%;
- padding:14px;
- border:0;
- border-radius:10px;
- background:var(--wine);
- color:white;
- font-weight:700;
- cursor:pointer;
- margin-top:12px;
-}
-
-button.secondary{
- background:#344054;
-}
-
-.status{
- padding:12px;
- margin-top:12px;
- border-radius:10px;
- background:#f2f4f7;
-}
-
-.status.ok{
- background:#e7f6ec;
- color:var(--success);
-}
-
-.preview{
- width:100%;
- max-height:300px;
- object-fit:contain;
- border-radius:12px;
- margin-top:12px;
-}
-
-table{
- width:100%;
- border-collapse:collapse;
- font-size:13px;
-}
-
-td,th{
- padding:8px;
- border-bottom:1px solid var(--border);
- text-align:left;
-}
-
-@media(max-width:700px){
- .grid{
-  grid-template-columns:1fr;
- }
-}
+body{margin:0;background:var(--bg);font-family:Segoe UI,Arial;color:#202733}
+header{background:linear-gradient(135deg,#7a0019,#500012);color:white;padding:20px}
+.container{max-width:950px;margin:auto;padding:15px}
+.card{background:white;border-radius:16px;padding:18px;margin-bottom:15px;box-shadow:0 5px 15px #0001}
+h2{font-size:18px}
+button{width:100%;padding:14px;border:0;border-radius:10px;background:var(--wine);color:white;font-weight:bold;margin-top:10px}
+video{width:100%;border-radius:12px;background:#111}
+.cameraBox{position:relative}
+.guide{position:absolute;top:25%;left:15%;width:70%;height:45%;border:3px solid #fff;border-radius:12px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+label{font-size:12px;font-weight:bold;color:#667085}
+input,textarea,select{width:100%;padding:11px;border:1px solid #ddd;border-radius:9px;margin-top:5px}
+.auto{background:#f1f3f5}
+.status{padding:10px;background:#eee;border-radius:8px;margin-top:10px}
+.ok{background:#e7f7ed;color:#067647}
+@media(max-width:700px){.grid{grid-template-columns:1fr}}
 </style>
-
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-
 </head>
-
 <body>
-
 <header>
 <h1>Inventario de Monitores</h1>
-<p>Dell / Samsung - Gestión de activos TI</p>
+<p>Escaneo Dell / Samsung con cámara</p>
 </header>
 
 <div class="container">
 
-
 <div class="card">
-<div class="title">1. Captura de etiqueta</div>
+<h2>1. Escaneo de etiqueta</h2>
 
-<input id="foto" type="file" accept="image/*" capture="environment">
-
-<img id="preview" class="preview" style="display:none">
-
-<button onclick="analizarEtiqueta()">Leer etiqueta</button>
-
-<div id="estado" class="status">
-Esperando imagen...
+<div class="cameraBox">
+<video id="video" autoplay playsinline></video>
+<div class="guide"></div>
 </div>
 
-<textarea id="ocr" placeholder="Texto reconocido"></textarea>
+<button onclick="abrirCamara()">Abrir cámara</button>
+<button onclick="capturar()">Capturar etiqueta</button>
 
+<canvas id="canvas" style="display:none"></canvas>
+<img id="foto" style="width:100%;margin-top:10px;border-radius:10px">
+
+<div id="estado" class="status">Cámara apagada</div>
+<textarea id="ocr" placeholder="Texto OCR"></textarea>
 </div>
 
 
 <div class="card">
-
-<div class="title">2. Información del fabricante (automático)</div>
-
+<h2>2. Datos detectados</h2>
 <div class="grid">
-
-<div class="field">
-<label>Marca</label>
-<input id="marca" class="auto" readonly>
+<div><label>Marca</label><input id="marca" class="auto" readonly></div>
+<div><label>Modelo</label><input id="modelo" class="auto" readonly></div>
+<div><label>Service Tag</label><input id="tag" class="auto" readonly></div>
+<div><label>Serial</label><input id="serial" class="auto" readonly></div>
+<div><label>MAC</label><input id="mac" class="auto" readonly></div>
+<div><label>Fabricación</label><input id="fabricacion" class="auto" readonly></div>
+<div><label>Express Code</label><input id="express" class="auto" readonly></div>
+<div><label>Tamaño</label><input id="tamano" class="auto" readonly></div>
 </div>
-
-<div class="field">
-<label>Modelo</label>
-<input id="modelo" class="auto" readonly>
-</div>
-
-<div class="field">
-<label>Service Tag</label>
-<input id="tag" class="auto" readonly>
-</div>
-
-<div class="field">
-<label>Número de Serie</label>
-<input id="serial" class="auto" readonly>
-</div>
-
-<div class="field">
-<label>MAC Address</label>
-<input id="mac" class="auto" readonly>
-</div>
-
-<div class="field">
-<label>Fecha fabricación</label>
-<input id="fabricacion" class="auto" readonly>
-</div>
-
-<div class="field">
-<label>Express Service Code</label>
-<input id="express" class="auto" readonly>
-</div>
-
-<div class="field">
-<label>Tamaño</label>
-<input id="tamano" class="auto" readonly>
-</div>
-
-</div>
-
 </div>
 
 
 <div class="card">
-
-<div class="title">3. Información patrimonial</div>
-
+<h2>3. Asignación</h2>
 <div class="grid">
-
-<div class="field">
-<label>Código activo interno</label>
-<input id="activo">
+<div><label>Código activo</label><input id="activo"></div>
+<div><label>Estado</label><select id="estadoActivo"><option>Operativo</option><option>Observado</option><option>Reparación</option><option>Almacén</option><option>Baja</option></select></div>
+<div><label>Usuario</label><input id="usuario"></div>
+<div><label>Área</label><input id="area"></div>
+<div><label>Sede</label><input id="sede"></div>
+<div><label>Ubicación</label><input id="ubicacion"></div>
 </div>
-
-<div class="field">
-<label>Estado</label>
-<select id="estadoActivo">
-<option>Operativo</option>
-<option>Operativo con observación</option>
-<option>En reparación</option>
-<option>Almacén</option>
-<option>Baja</option>
-</select>
-</div>
-
-</div>
-
-</div>
-
-
-<div class="card">
-
-<div class="title">4. Asignación del equipo</div>
-
-<div class="grid">
-
-<div class="field">
-<label>Usuario asignado</label>
-<input id="usuario">
-</div>
-
-<div class="field">
-<label>Área / Gerencia</label>
-<input id="area">
-</div>
-
-<div class="field">
-<label>Sede</label>
-<input id="sede">
-</div>
-
-<div class="field">
-<label>Ubicación física</label>
-<input id="ubicacion">
-</div>
-
-</div>
-
-</div>
-
-
-<div class="card">
-
-<div class="title">5. Observaciones</div>
-
-<textarea id="observaciones"></textarea>
-
+<textarea id="obs" placeholder="Observaciones"></textarea>
 <button onclick="guardar()">Guardar activo</button>
-
 </div>
 
-
-<div class="card">
-
-<div class="title">Inventario registrado</div>
-
-<button class="secondary" onclick="exportar()">Exportar Excel CSV</button>
-
-<table id="tabla"></table>
-
 </div>
-
-
-</div>
-
 
 <script>
+let stream;
 
-let inventario=[];
+const $=x=>document.getElementById(x);
 
-const ids=[
-"marca","modelo","tag","serial","mac",
-"fabricacion","express","tamano",
-"activo","estadoActivo","usuario",
-"area","sede","ubicacion","observaciones"
-];
+function set(id,v){$(id).value=v||""}
 
-
-function set(id,val){
- document.getElementById(id).value=val || "";
+async function abrirCamara(){
+try{
+stream=await navigator.mediaDevices.getUserMedia({
+video:{facingMode:{ideal:"environment"}},
+audio:false
+});
+$("video").srcObject=stream;
+$("estado").innerHTML="Cámara activa. Alinee la etiqueta dentro del cuadro.";
+}catch(e){
+$("estado").innerHTML="No se pudo abrir cámara. Verifique permisos.";
+}
 }
 
-
-function normalizar(t){
-
-return t
-.toUpperCase()
-.replace(/D3LL/g,"DELL")
-.replace(/SVCTAG/g,"SVC TAG")
-.replace(/SERVICE TAG/g,"SVC TAG");
-
+async function capturar(){
+let c=$("canvas"),v=$("video");
+c.width=v.videoWidth;c.height=v.videoHeight;
+c.getContext("2d").drawImage(v,0,0);
+c.toBlob(async b=>{
+let file=new File([b],"etiqueta.jpg",{type:"image/jpeg"});
+$("foto").src=URL.createObjectURL(file);
+$("estado").innerHTML="Procesando imagen...";
+let r=await Tesseract.recognize(file,"eng");
+$("ocr").value=r.data.text;
+extraer(r.data.text);
+},"image/jpeg");
 }
 
-
-function analizarDatos(texto){
-
-let t=normalizar(texto);
+function extraer(t){
 let x;
+let u=t.toUpperCase()
+.replace(/D3LL/g,"DELL")
+.replace(/SVCTAG/g,"SVC TAG");
 
+if(u.includes("DELL"))set("marca","DELL");
+if(u.includes("SAMSUNG"))set("marca","SAMSUNG");
 
-if(t.includes("DELL"))
- set("marca","DELL");
+x=u.match(/\b[PUS]\d{4}[A-Z]{1,4}\b/);
+if(x){set("modelo",x[0]);set("tamano",x[0].substring(1,3)+'"')}
 
-else if(t.includes("SAMSUNG"))
- set("marca","SAMSUNG");
-
-
-x=t.match(/\b[PUS]\d{4}[A-Z]{1,4}\b/);
-if(x){
- set("modelo",x[0]);
- let size=x[0].match(/\d{2}/);
- if(size)set("tamano",size[0]+'"');
-}
-
-
-x=t.match(/SVC\s*TAG[:\s\n]*([A-Z0-9]{6,8})/);
+x=u.match(/SVC\s*TAG[\s:\n]*([A-Z0-9]{7})/);
 if(x)set("tag",x[1]);
 
-
-x=t.match(/S\/N[:\s\n]*([A-Z0-9\-]{10,50})/);
+x=u.match(/(TH-[A-Z0-9-]{10,45})/);
 if(x)set("serial",x[1]);
 
+x=u.match(/[A-F0-9]{12}/);
+if(x && u.includes("MAC"))set("mac",x[0]);
 
-x=t.match(/MAC\s*ADDRESS[:\s]*([A-F0-9]{12})/);
-if(x)set("mac",x[1]);
+x=u.match(/[A-Z]+\s+\d{4}/);
+if(x && u.includes("DATE"))set("fabricacion",x[0]);
 
-
-x=t.match(/([A-Z]+\s+\d{4})/);
-if(x && t.includes("DATE"))
- set("fabricacion",x[1]);
-
-
-x=t.match(/EXPRESS SERVICE CODE[:\s\n]*([0-9\s]{8,20})/);
-if(x)set("express",x[1].trim());
-
-
-document.getElementById("estado").innerHTML=
-"Datos detectados correctamente. Revisar antes de guardar.";
-
-document.getElementById("estado").className="status ok";
-
+$("estado").innerHTML="Extracción finalizada. Revise los datos detectados.";
+$("estado").className="status ok";
 }
-
-
-async function analizarEtiqueta(){
-
-let file=document.getElementById("foto").files[0];
-
-if(!file){
- alert("Seleccione una imagen");
- return;
-}
-
-
-let img=document.getElementById("preview");
-img.src=URL.createObjectURL(file);
-img.style.display="block";
-
-
-document.getElementById("estado").innerHTML="Procesando OCR...";
-
-
-let result=await Tesseract.recognize(file,"eng");
-
-
-document.getElementById("ocr").value=result.data.text;
-
-
-analizarDatos(result.data.text);
-
-}
-
 
 function guardar(){
-
-let item={};
-
-ids.forEach(i=>{
- item[i]=document.getElementById(i).value;
-});
-
-item.fecha=new Date().toLocaleString();
-
-
-if(!item.serial && !item.tag && !item.activo){
- alert("Debe existir Serial, Service Tag o Código activo");
- return;
+if(!$("serial").value&&!$("tag").value&&!$("activo").value){
+alert("Falta identificador del activo");
+return;
 }
-
-
-inventario.push(item);
-
-render();
-
-alert("Activo guardado correctamente");
-
+alert("Activo guardado");
 }
-
-
-function render(){
-
-let html="<tr><th>Marca</th><th>Modelo</th><th>Serial</th><th>Usuario</th><th>Ubicación</th></tr>";
-
-inventario.forEach(x=>{
- html+=`
-<tr>
-<td>${x.marca}</td>
-<td>${x.modelo}</td>
-<td>${x.serial}</td>
-<td>${x.usuario}</td>
-<td>${x.ubicacion}</td>
-</tr>`;
-});
-
-document.getElementById("tabla").innerHTML=html;
-
-}
-
-
-function exportar(){
-
-let csv="Marca;Modelo;Serial;Service Tag;Usuario;Area;Sede;Ubicacion;Estado\n";
-
-inventario.forEach(x=>{
-csv+=`${x.marca};${x.modelo};${x.serial};${x.tag};${x.usuario};${x.area};${x.sede};${x.ubicacion};${x.estadoActivo}\n`;
-});
-
-
-let a=document.createElement("a");
-
-a.href=URL.createObjectURL(new Blob([csv]));
-
-a.download="inventario_monitores.csv";
-
-a.click();
-
-}
-
 </script>
-
 </body>
 </html>
