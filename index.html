@@ -2,133 +2,248 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Dell Scanner V5</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<title>Dell Scanner V7 Inventario</title>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
-body{font-family:Arial;background:#0f172a;color:white;padding:15px}
-.card{background:#1e293b;padding:18px;border-radius:16px;margin-bottom:15px}
-video{width:100%;border-radius:12px;background:#000}
-button{width:100%;padding:15px;margin-top:10px;background:#0076ce;color:white;border:0;border-radius:12px;font-size:17px}
-input{width:100%;padding:12px;margin:5px 0;background:#111827;color:white;border:0;border-radius:8px}
-label{color:#94a3b8;font-size:13px}
+:root{--bg:#0f172a;--card:#1e293b;--input:#111827;--border:#334155;--accent:#0076ce;--ok:#22c55e;--danger:#ef4444;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}
+body{font-family:Arial,sans-serif;background:var(--bg);color:#fff;padding:15px;margin:0}
+.app{max-width:600px;margin:auto}
+.card{background:var(--card);padding:18px;border-radius:16px;margin-bottom:15px}
+video{width:100%;background:#000;border-radius:12px}
+button{width:100%;padding:14px;margin-top:10px;background:var(--accent);color:#fff;border:0;border-radius:10px;font-size:16px}
+button.secondary{background:#334155}
+button.danger{background:var(--danger);width:auto;padding:6px 10px;font-size:12px;margin:0}
+input{width:100%;padding:10px;margin:5px 0;background:var(--input);color:#fff;border:1px solid var(--border);border-radius:8px}
+label{font-size:12px;color:#94a3b8;margin-top:8px;display:block}
+.tablewrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px;min-width:480px}
+td,th{padding:8px;border-bottom:1px solid var(--border);text-align:left}
+.badge{color:var(--ok)}
+#status{color:#94a3b8;font-size:13px}
+.hint{font-size:11px;color:#64748b;margin-top:-2px;margin-bottom:6px}
 </style>
 </head>
 <body>
-
+<div class="app">
 <h2>Inventario Monitores Dell</h2>
 
 <div class="card">
-<video id="video" autoplay playsinline></video>
+<video id="video" autoplay playsinline muted></video>
 <button onclick="camera()">Abrir cámara</button>
-<button onclick="scan()">Capturar y analizar</button>
+<button class="secondary" onclick="scan()">Capturar y analizar</button>
 <canvas id="canvas" hidden></canvas>
+<p class="hint">Enfoca bien la etiqueta trasera del monitor (Service Tag, Express Code, S/N).</p>
 </div>
 
 <div class="card">
-<h3>Datos encontrados</h3>
+<h3>Datos detectados</h3>
+<label>Marca</label><input id="marca" placeholder="Marca">
+<label>Modelo</label><input id="modelo" placeholder="Modelo">
+<label>Service Tag (7 caracteres)</label><input id="service" placeholder="Service Tag">
+<label>Express Service Code</label><input id="expresscode" placeholder="Express Service Code">
+<label>Serial Number / PPID</label><input id="serial" placeholder="Serial Number">
+<label>Date Of Mfg</label><input id="fecha" placeholder="Date Of Mfg">
+<label>MAC Address</label><input id="mac" placeholder="MAC Address">
+<button onclick="save()">Confirmar registro</button>
+<p id="status"></p>
+</div>
 
-<label>Marca</label><input id="marca">
-<label>Modelo</label><input id="modelo">
-<label>Service Tag</label><input id="svc">
-<label>Serial Number</label><input id="serial">
-<label>Express Code</label><input id="express">
-<label>Date Of Mfg</label><input id="fecha">
-<label>MAC Address</label><input id="mac">
-
-<button onclick="guardar()">Guardar</button>
-
-<p id="estado"></p>
+<div class="card">
+<h3>Inventario almacenado (<span id="count">0</span>)</h3>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Modelo</th><th>SVC Tag</th><th>Serial</th><th>Fecha</th><th></th></tr></thead>
+<tbody id="inventory"></tbody>
+</table>
+</div>
+<button onclick="exportCSV()">Exportar CSV</button>
+</div>
 </div>
 
 <script>
-
 let video=document.getElementById("video");
 let canvas=document.getElementById("canvas");
+let statusEl=document.getElementById("status");
+let db=null, downloadsCap=null;
+let records=[];
+
+async function initCapabilities(){
+  try{ db = (typeof claude!=="undefined") ? await claude.use("db") : null; }catch(e){ db=null; }
+  try{ downloadsCap = (typeof claude!=="undefined") ? await claude.use("downloads") : null; }catch(e){ downloadsCap=null; }
+  await loadRecords();
+}
+
+async function loadRecords(){
+  if(db){
+    try{
+      const snap = await db.collection("equipos").orderBy("fecha_captura_ts","desc").limit(500).get();
+      records = snap.docs.map(d=>({id:d.id, ...d.data()}));
+    }catch(e){
+      records = JSON.parse(localStorage.getItem("dell_inventory")||"[]");
+    }
+  } else {
+    records = JSON.parse(localStorage.getItem("dell_inventory")||"[]");
+  }
+  render();
+}
 
 async function camera(){
-let s=await navigator.mediaDevices.getUserMedia({
-video:{facingMode:"environment"}
-});
-video.srcObject=s;
+  try{
+    let s=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
+    video.srcObject=s;
+  }catch(e){
+    statusEl.innerHTML="No se pudo abrir la cámara: "+e.message;
+  }
 }
 
+// --- extracción de campos desde el texto OCR ---
+function extractField(text, keywordRegexSrc, valueRegexSrc){
+  const re = new RegExp(keywordRegexSrc + "\\s*[:\\-]?\\s*" + valueRegexSrc);
+  const m = text.match(re);
+  return m ? m[1] : null;
+}
+
+function parseLabel(text){
+  const modeloKw = extractField(text, "MODEL", "([A-Z]{1,3}\\d{3,4}[A-Z]{0,3})");
+  const modeloBare = text.match(/\b[A-Z]{1,2}\d{4}[A-Z]{0,3}\b/);
+
+  const service = extractField(text, "(?:SERVICE\\s*TAG|SVC\\s*TAG)", "([A-Z0-9]{7})\\b");
+
+  const express = extractField(text, "(?:EXPRESS\\s*(?:SERVICE)?\\s*CODE|EXP\\s*SVC\\s*CODE)", "(\\d{10,11})");
+
+  const serial = extractField(text, "(?:S\\s*/\\s*N|SERIAL\\s*(?:NUMBER)?|PPID)", "([A-Z0-9\\-]{7,20})\\b");
+
+  const macKw = extractField(text, "MAC(?:\\s*ADDRESS)?", "([A-F0-9]{12}|(?:[A-F0-9]{2}[:\\-]){5}[A-F0-9]{2})");
+  const macBare = text.match(/\b(?:[A-F0-9]{2}[:\-]){5}[A-F0-9]{2}\b/);
+
+  const fecha = extractField(text, "(?:DATE\\s*OF\\s*MFG|MFG\\s*DATE|DOM)", "([0-9]{1,2}[\\/\\-\\.][0-9]{1,2}[\\/\\-\\.][0-9]{2,4}|[0-9]{4}[\\/\\-\\.][0-9]{1,2})");
+
+  return{
+    modelo: modeloKw || (modeloBare?modeloBare[0]:""),
+    service: service || "",
+    express: express || "",
+    serial: serial || "",
+    mac: macKw || (macBare?macBare[0]:""),
+    fecha: fecha || ""
+  };
+}
 
 async function scan(){
+  if(!video.srcObject){ statusEl.innerHTML="Primero abre la cámara."; return; }
+  statusEl.innerHTML="Analizando...";
+  canvas.width=video.videoWidth;
+  canvas.height=video.videoHeight;
+  canvas.getContext("2d").drawImage(video,0,0);
 
-canvas.width=video.videoWidth;
-canvas.height=video.videoHeight;
+  let ocr=await Tesseract.recognize(canvas,"eng");
 
-canvas.getContext("2d").drawImage(video,0,0);
+  let text=ocr.data.text
+    .replace(/[\u3400-\u9FFF]/g,"")
+    .replace(/[^\x00-\x7F]/g,"")
+    .toUpperCase();
 
-estado.innerHTML="Procesando OCR real...";
+  let f=parseLabel(text);
 
-let r=await Tesseract.recognize(canvas,"eng");
+  marca.value="DELL";
+  modelo.value=f.modelo;
+  service.value=f.service;
+  expresscode.value=f.express;
+  serial.value=f.serial;
+  mac.value=f.mac;
+  fecha.value=f.fecha;
 
-let text=filterDell(r.data.text);
-
-parse(text);
-
-estado.innerHTML="OCR completado. Revisar campos y confirmar.";
-
+  statusEl.innerHTML="OCR terminado. Revise y corrija los campos antes de guardar.";
 }
 
+async function save(){
+  if(!marca.value && !modelo.value && !service.value && !serial.value){
+    statusEl.innerHTML="Complete al menos un campo antes de guardar.";
+    return;
+  }
+  let item={
+    marca:marca.value,
+    modelo:modelo.value,
+    service_tag:service.value,
+    express_code:expresscode.value,
+    serial:serial.value,
+    fecha_fabricacion:fecha.value,
+    mac_address:mac.value,
+    fecha_captura:new Date().toLocaleString(),
+    fecha_captura_ts:Date.now()
+  };
 
-function filterDell(t){
+  if(db){
+    try{
+      const ref = await db.collection("equipos").add(item);
+      records.unshift({id:ref.id, ...item});
+    }catch(e){
+      records.unshift({id:String(Date.now()), ...item});
+    }
+  } else {
+    item.id=Date.now();
+    records.unshift(item);
+    localStorage.setItem("dell_inventory", JSON.stringify(records));
+  }
 
-return t
-.replace(/[\u3400-\u9FFF]/g,"")
-.replace(/[^\x00-\x7F]/g,"")
-.toUpperCase();
-
+  render();
+  statusEl.innerHTML="Equipo almacenado correctamente.";
+  [marca,modelo,service,expresscode,serial,fecha,mac].forEach(el=>el.value="");
+  marca.value="DELL";
 }
 
-
-function parse(t){
-
-let modelo=t.match(/[PUS][0-9]{4}[A-Z]{1,3}/);
-
-let serial=t.match(/TH-[A-Z0-9-]{15,40}/);
-
-let mac=t.match(/[A-F0-9]{12}/);
-
-let express=t.replace(/\s/g,"").match(/[0-9]{10,12}/);
-
-let svc=t.match(/SVC\s*TAG\s*:?\s*([A-Z0-9]{7})/);
-
-let fecha=t.match(/DATE OF MFG.*?([A-Z]+\s*,?\s*\d{4})/);
-
-
-marca.value="DELL";
-modelo.value=modelo?modelo[0]:"";
-svc.value=svc?svc[1]:"";
-serial.value=serial?serial[0]:"";
-express.value=express?express[0]:"";
-mac.value=mac?mac[0]:"";
-fecha.value=fecha?fecha[1]:"";
-
+async function removeRecord(id){
+  if(db){
+    try{ await db.collection("equipos").doc(String(id)).delete(); }catch(e){}
+  }
+  records=records.filter(r=>String(r.id)!==String(id));
+  if(!db) localStorage.setItem("dell_inventory", JSON.stringify(records));
+  render();
 }
 
+function esc(s){ return (s||"").toString().replace(/</g,"&lt;"); }
 
-function guardar(){
-
-let data={
-marca:marca.value,
-modelo:modelo.value,
-service:svc.value,
-serial:serial.value,
-express:express.value,
-fecha:fecha.value,
-mac:mac.value
-};
-
-localStorage.setItem("dell_inventory_last",JSON.stringify(data));
-
-estado.innerHTML="Guardado correctamente";
-
+function render(){
+  document.getElementById("count").textContent=records.length;
+  let html="";
+  records.forEach(x=>{
+    html+=`<tr>
+<td>${esc(x.modelo)}</td>
+<td>${esc(x.service_tag)}</td>
+<td>${esc(x.serial)}</td>
+<td>${esc(x.fecha_fabricacion)}</td>
+<td><button class="danger" onclick="removeRecord('${x.id}')">✕</button></td>
+</tr>`;
+  });
+  inventory.innerHTML=html;
 }
 
+async function exportCSV(){
+  let csv="ID,Marca,Modelo,Service Tag,Express Code,Serial,Fecha Fabricacion,MAC,Fecha Captura\n";
+  records.forEach(x=>{
+    csv+=`${x.id},${x.marca||""},${x.modelo||""},${x.service_tag||""},${x.express_code||""},${x.serial||""},${x.fecha_fabricacion||""},${x.mac_address||""},${x.fecha_captura||""}\n`;
+  });
+
+  if(downloadsCap){
+    try{
+      await downloadsCap.save({filename:"Inventario_Monitores_Dell.csv", data:csv});
+      statusEl.innerHTML="CSV exportado.";
+      return;
+    }catch(e){
+      statusEl.innerHTML="No se pudo exportar: "+(e.message||e.code||e);
+      return;
+    }
+  }
+
+  let blob=new Blob([csv],{type:"text/csv"});
+  let a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="Inventario_Monitores_Dell.csv";
+  a.click();
+}
+
+initCapabilities();
 </script>
-
 </body>
 </html>
