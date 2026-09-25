@@ -2,19 +2,22 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Inventario Monitores TI V11</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Inventario Monitores TI V12</title>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
 <style>
 :root{--wine:#7a0019;--bg:#f4f6f8}
-body{margin:0;background:var(--bg);font-family:Segoe UI,Arial;color:#202733}
+body{margin:0;background:var(--bg);font-family:Segoe UI,Arial;color:#222}
 header{background:linear-gradient(135deg,#7a0019,#4b0010);color:white;padding:22px}
 .container{max-width:1000px;margin:auto;padding:15px}
 .card{background:white;border-radius:18px;padding:18px;margin-bottom:15px;box-shadow:0 5px 18px #0002}
 button{width:100%;padding:14px;background:#7a0019;color:white;border:0;border-radius:10px;font-weight:bold;margin-top:10px}
-video{width:100%;border-radius:12px;background:#000}
+video,img{width:100%;border-radius:12px;background:#000}
 canvas{display:none}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-input,select,textarea{width:100%;padding:11px;border-radius:9px;border:1px solid #ccc}
+input,textarea,select{width:100%;padding:11px;border-radius:9px;border:1px solid #ccc}
 .auto{background:#eef1f4}
 .status{padding:12px;background:#eee;border-radius:10px}
 .ok{background:#e6f7ed;color:#087443}
@@ -23,29 +26,35 @@ th,td{padding:8px;border-bottom:1px solid #ddd}
 @media(max-width:700px){.grid{grid-template-columns:1fr}}
 </style>
 </head>
+
 <body>
 
 <header>
 <h1>Inventario de Monitores TI</h1>
-<p>Escaneo y control de activos</p>
+<p>Escaneo inteligente Dell / Samsung</p>
 </header>
 
 <div class="container">
 
 <div class="card">
 <h2>1. Escanear etiqueta</h2>
+
 <video id="video" autoplay playsinline></video>
 <canvas id="canvas"></canvas>
+<img id="preview" style="display:none">
 
 <button onclick="abrirCamara()">Abrir cámara</button>
-<button onclick="capturar()">Capturar y analizar</button>
+<button onclick="capturarAnalizar()">Capturar y analizar</button>
 
-<div id="estado" class="status">Cámara detenida</div>
-<textarea id="texto" placeholder="Resultado detección"></textarea>
+<div id="estado" class="status">Esperando cámara...</div>
+
+<textarea id="ocr" placeholder="Texto detectado"></textarea>
 </div>
 
+
 <div class="card">
-<h2>2. Datos técnicos detectados</h2>
+<h2>2. Datos técnicos</h2>
+
 <div class="grid">
 <input id="marca" class="auto" placeholder="Marca">
 <input id="modelo" class="auto" placeholder="Modelo">
@@ -56,10 +65,13 @@ th,td{padding:8px;border-bottom:1px solid #ddd}
 <input id="express" class="auto" placeholder="Express Code">
 <input id="tamano" class="auto" placeholder="Tamaño">
 </div>
+
 </div>
 
+
 <div class="card">
-<h2>3. Datos de inventario</h2>
+<h2>3. Inventario</h2>
+
 <div class="grid">
 <input id="activo" placeholder="Código activo">
 <select id="estadoActivo">
@@ -69,79 +81,147 @@ th,td{padding:8px;border-bottom:1px solid #ddd}
 <option>Almacén</option>
 <option>Baja</option>
 </select>
-<input id="usuario" placeholder="Usuario asignado">
+
+<input id="usuario" placeholder="Usuario">
 <input id="area" placeholder="Área">
 <input id="sede" placeholder="Sede">
 <input id="ubicacion" placeholder="Ubicación">
 </div>
+
 <textarea id="obs" placeholder="Observaciones"></textarea>
+
 <button onclick="guardar()">Guardar monitor</button>
+
 </div>
+
 
 <div class="card">
-<h2>4. Resumen inventario</h2>
+<h2>4. Resumen</h2>
+
 <p>Total equipos: <b id="total">0</b></p>
-<table id="tabla">
-<tr><th>Marca</th><th>Modelo</th><th>Serial</th><th>Usuario</th><th>Ubicación</th></tr>
-</table>
+
+<table id="tabla"></table>
+
 <button onclick="exportar()">Exportar CSV</button>
+
 </div>
 
 </div>
+
 
 <script>
+
 let stream=null;
 let inventario=[];
 
 const $=id=>document.getElementById(id);
 
-function set(id,v){$(id).value=v||""}
+function set(id,v){
+$(id).value=v||"";
+}
+
 
 async function abrirCamara(){
+
 try{
+
 stream=await navigator.mediaDevices.getUserMedia({
 video:{facingMode:{ideal:"environment"}},
 audio:false
 });
+
 $("video").srcObject=stream;
-$("estado").innerHTML="Cámara activa";
+
+$("estado").innerHTML="Cámara activa. Acerque la etiqueta.";
+
 }catch(e){
+
 $("estado").innerHTML="Error cámara: "+e.message;
-}
+
 }
 
-function capturar(){
-if(!stream){$("estado").innerHTML="Abra la cámara primero";return;}
+}
+
+
+async function capturarAnalizar(){
+
+if(!stream){
+$("estado").innerHTML="Primero abra la cámara";
+return;
+}
 
 let video=$("video");
 let canvas=$("canvas");
+
 canvas.width=video.videoWidth;
 canvas.height=video.videoHeight;
+
 canvas.getContext("2d").drawImage(video,0,0);
 
-$("estado").innerHTML="Imagen capturada. Lista para análisis.";
+canvas.toBlob(async blob=>{
 
-analizarPatrones();
+let file=new File([blob],"etiqueta.jpg",{type:"image/jpeg"});
+
+$("preview").src=URL.createObjectURL(file);
+$("preview").style.display="block";
+
+$("estado").innerHTML="Procesando OCR...";
+
+let result=await Tesseract.recognize(file,"eng");
+
+let texto=result.data.text;
+
+$("ocr").value=texto;
+
+analizarDatos(texto);
+
+},"image/jpeg");
+
 }
 
-function analizarPatrones(){
-/* Base preparada para Data Matrix/OCR */
-let texto=$("texto").value.toUpperCase();
 
-if(texto.includes("DELL"))set("marca","DELL");
+function analizarDatos(texto){
 
-let x=texto.match(/[PUS]\d{4}[A-Z]{1,4}/);
-if(x){set("modelo",x[0]);set("tamano",x[0].substring(1,3)+'"')}
+let t=texto.toUpperCase();
 
-x=texto.match(/TH-[A-Z0-9-]{10,50}/);
+if(t.includes("DELL")) set("marca","DELL");
+if(t.includes("SAMSUNG")) set("marca","SAMSUNG");
+
+
+let x;
+
+
+x=t.match(/[PUS]\d{4}[A-Z]{1,5}/);
+if(x){
+set("modelo",x[0]);
+set("tamano",x[0].substring(1,3)+'"');
+}
+
+
+x=t.match(/TH[-A-Z0-9]{10,60}/);
 if(x)set("serial",x[0]);
 
-x=texto.match(/[A-Z0-9]{7}/);
+
+x=t.match(/[A-Z0-9]{7}/);
 if(x)set("tag",x[0]);
+
+
+x=t.match(/[A-F0-9]{12}/);
+if(x)set("mac",x[0]);
+
+
+x=t.match(/(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)\s+\d{4}/);
+if(x)set("fabricacion",x[0]);
+
+
+$("estado").className="status ok";
+$("estado").innerHTML="Análisis terminado. Revise campos detectados.";
 
 }
 
+
 function guardar(){
+
 let item={
 fecha:new Date().toLocaleString(),
 marca:marca.value,
@@ -150,44 +230,67 @@ serial:serial.value,
 tag:tag.value,
 mac:mac.value,
 fabricacion:fabricacion.value,
-express:express.value,
-activo:activo.value,
-estado:estadoActivo.value,
 usuario:usuario.value,
 area:area.value,
 sede:sede.value,
 ubicacion:ubicacion.value,
+estado:estadoActivo.value,
 obs:obs.value
 };
 
-if(!item.serial&&!item.tag&&!item.activo){
-alert("Falta identificador del activo");
+if(!item.serial&&!item.tag&&!item.modelo){
+alert("No hay datos técnicos detectados");
 return;
 }
 
 inventario.push(item);
+
 render();
+
 alert("Monitor guardado");
+
 }
+
 
 function render(){
+
 total.innerHTML=inventario.length;
+
 tabla.innerHTML="<tr><th>Marca</th><th>Modelo</th><th>Serial</th><th>Usuario</th><th>Ubicación</th></tr>";
+
 inventario.forEach(x=>{
-tabla.innerHTML+=`<tr><td>${x.marca}</td><td>${x.modelo}</td><td>${x.serial}</td><td>${x.usuario}</td><td>${x.ubicacion}</td></tr>`;
+
+tabla.innerHTML+=`
+<tr>
+<td>${x.marca}</td>
+<td>${x.modelo}</td>
+<td>${x.serial}</td>
+<td>${x.usuario}</td>
+<td>${x.ubicacion}</td>
+</tr>`;
+
 });
+
 }
 
+
 function exportar(){
-let csv="Fecha;Marca;Modelo;Serial;Service Tag;Usuario;Area;Sede;Ubicacion;Estado;Observaciones\n";
+
+let csv="Fecha;Marca;Modelo;Serial;ServiceTag;MAC;Fabricacion;Usuario;Area;Sede;Ubicacion;Estado;Observacion\n";
+
 inventario.forEach(x=>{
-csv+=`${x.fecha};${x.marca};${x.modelo};${x.serial};${x.tag};${x.usuario};${x.area};${x.sede};${x.ubicacion};${x.estado};${x.obs}\n`;
+
+csv+=`${x.fecha};${x.marca};${x.modelo};${x.serial};${x.tag};${x.mac};${x.fabricacion};${x.usuario};${x.area};${x.sede};${x.ubicacion};${x.estado};${x.obs}\n`;
+
 });
+
 let a=document.createElement("a");
 a.href=URL.createObjectURL(new Blob([csv]));
 a.download="Inventario_Monitores.csv";
 a.click();
+
 }
+
 </script>
 
 </body>
