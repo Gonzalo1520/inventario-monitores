@@ -3,26 +3,30 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
-<title>Dell Scanner V7 Inventario</title>
+<title>Dell Scanner V8 Inventario</title>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
-:root{--bg:#0f172a;--card:#1e293b;--input:#111827;--border:#334155;--accent:#0076ce;--ok:#22c55e;--danger:#ef4444;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+:root{--bg:#0f172a;--card:#1e293b;--input:#111827;--border:#334155;--accent:#0076ce;--ok:#22c55e;--danger:#ef4444;--warn:#f59e0b;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 *{box-sizing:border-box}
 body{font-family:Arial,sans-serif;background:var(--bg);color:#fff;padding:15px;margin:0}
 .app{max-width:600px;margin:auto}
 .card{background:var(--card);padding:18px;border-radius:16px;margin-bottom:15px}
-video{width:100%;background:#000;border-radius:12px}
+video,#preview{width:100%;background:#000;border-radius:12px;display:block}
+#preview{margin-top:10px;max-height:320px;object-fit:contain}
 button{width:100%;padding:14px;margin-top:10px;background:var(--accent);color:#fff;border:0;border-radius:10px;font-size:16px}
 button.secondary{background:#334155}
+button:disabled{opacity:.5}
 button.danger{background:var(--danger);width:auto;padding:6px 10px;font-size:12px;margin:0}
-input{width:100%;padding:10px;margin:5px 0;background:var(--input);color:#fff;border:1px solid var(--border);border-radius:8px}
+input,select{width:100%;padding:10px;margin:5px 0;background:var(--input);color:#fff;border:1px solid var(--border);border-radius:8px}
+input.missing{border-color:var(--warn)}
 label{font-size:12px;color:#94a3b8;margin-top:8px;display:block}
 .tablewrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:12px;min-width:480px}
 td,th{padding:8px;border-bottom:1px solid var(--border);text-align:left}
-.badge{color:var(--ok)}
-#status{color:#94a3b8;font-size:13px}
-.hint{font-size:11px;color:#64748b;margin-top:-2px;margin-bottom:6px}
+#status{color:#94a3b8;font-size:13px;line-height:1.4}
+.hint{font-size:11px;color:#64748b;margin:4px 0 6px}
+.bar{height:6px;background:var(--input);border-radius:4px;margin-top:10px;overflow:hidden;display:none}
+.bar>div{height:100%;width:0;background:var(--accent);transition:width .3s}
 </style>
 </head>
 <body>
@@ -30,22 +34,36 @@ td,th{padding:8px;border-bottom:1px solid var(--border);text-align:left}
 <h2>Inventario Monitores Dell</h2>
 
 <div class="card">
-<video id="video" autoplay playsinline muted></video>
-<button onclick="camera()">Abrir cámara</button>
-<button class="secondary" onclick="scan()">Capturar y analizar</button>
-<canvas id="canvas" hidden></canvas>
-<p class="hint">Enfoca bien la etiqueta trasera del monitor (Service Tag, Express Code, S/N).</p>
+<input type="file" id="file" accept="image/*" hidden>
+<button onclick="document.getElementById('file').click()">📷 Subir imagen de la etiqueta</button>
+<img id="preview" alt="" hidden>
+<div class="bar" id="bar"><div id="barfill"></div></div>
+<p class="hint">Sube una foto nítida de la etiqueta (sirve con fondo negro o claro). También puedes usar la cámara:</p>
+<video id="video" autoplay playsinline muted hidden></video>
+<button class="secondary" onclick="camera()">Abrir cámara</button>
+<button class="secondary" onclick="scanCamera()">Capturar y analizar</button>
 </div>
 
 <div class="card">
 <h3>Datos detectados</h3>
-<label>Marca</label><input id="marca" placeholder="Marca">
-<label>Modelo</label><input id="modelo" placeholder="Modelo">
-<label>Service Tag (7 caracteres)</label><input id="service" placeholder="Service Tag">
-<label>Express Service Code</label><input id="expresscode" placeholder="Express Service Code">
-<label>Serial Number / PPID</label><input id="serial" placeholder="Serial Number">
-<label>Date Of Mfg</label><input id="fecha" placeholder="Date Of Mfg">
-<label>MAC Address</label><input id="mac" placeholder="MAC Address">
+<label>Marca</label><input id="marca" placeholder="Marca" value="DELL">
+<label>Modelo (línea P Dell)</label>
+<select id="modeloSelect" onchange="onModeloSelectChange()">
+<option value="">-- Seleccione un modelo --</option>
+<option>P2219H</option><option>P2319H</option><option>P2419H</option><option>P2719H</option>
+<option>P2222H</option><option>P2422H</option><option>P2422HE</option><option>P2722H</option><option>P2722HE</option>
+<option>P2423D</option><option>P2423DE</option><option>P2723D</option><option>P2723DE</option>
+<option>P2225H</option><option>P2425H</option><option>P2425HE</option><option>P2725H</option><option>P2725HE</option>
+<option>P3221D</option><option>P3223DE</option><option>P3225QE</option><option>P3421W</option>
+<option value="OTRO">Otro (escribir abajo)</option>
+</select>
+<input id="modelo" placeholder="Modelo (autocompletado por OCR o escriba aquí)">
+<label>Service Tag (7 caracteres)</label><input id="service" placeholder="Ej: D19CTX3">
+<label>Express Service Code</label><input id="expresscode" placeholder="Ej: 28374351735">
+<label>Serial Number / PPID</label><input id="serial" placeholder="Ej: TH-01CBXN-TVH00-41P-1WSB-A06">
+<label>Date Of Mfg (mes / año)</label><input type="month" id="fecha">
+<label>MAC Address</label><input id="mac" placeholder="Ej: 7486E2FF121E">
+<label>Usuario</label><input id="usuario" placeholder="Nombre del usuario asignado">
 <button onclick="save()">Confirmar registro</button>
 <p id="status"></p>
 </div>
@@ -54,7 +72,7 @@ td,th{padding:8px;border-bottom:1px solid var(--border);text-align:left}
 <h3>Inventario almacenado (<span id="count">0</span>)</h3>
 <div class="tablewrap">
 <table>
-<thead><tr><th>Modelo</th><th>SVC Tag</th><th>Serial</th><th>Fecha</th><th></th></tr></thead>
+<thead><tr><th>Modelo</th><th>SVC Tag</th><th>Serial</th><th>Fecha</th><th>Usuario</th><th></th></tr></thead>
 <tbody id="inventory"></tbody>
 </table>
 </div>
@@ -63,184 +81,305 @@ td,th{padding:8px;border-bottom:1px solid var(--border);text-align:left}
 </div>
 
 <script>
-let video=document.getElementById("video");
-let canvas=document.getElementById("canvas");
-let statusEl=document.getElementById("status");
-let db=null, downloadsCap=null;
-let records=[];
+/* ===== NÚCLEO OCR (mismo código probado en Node con la etiqueta real) ===== */
+const MESES={JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12,ENE:1,ABR:4,AGO:8,DIC:12};
+const pad2=n=>String(n).padStart(2,"0");
+const DIG_FIX={O:"0",Q:"0",D:"0",I:"1",L:"1",S:"5",B:"8",Z:"2",G:"6"};
+const fixDigits=s=>(s||"").split("").map(c=>/[0-9]/.test(c)?c:(DIG_FIX[c]||c)).join("");
+const HEX_FIX={O:"0",Q:"0",I:"1",L:"1",S:"5",Z:"2",G:"6"};
+const fixHex=s=>(s||"").split("").map(c=>/[A-F0-9]/.test(c)?c:(HEX_FIX[c]||c)).join("");
+
+// Gris + auto-inversión (fondo oscuro/texto claro -> texto negro) + estiramiento de contraste.
+// NO binariza: Tesseract lee mejor el gris que un umbral duro.
+function prepPixels(d){
+  const n=d.length/4, g=new Uint8Array(n), hist=new Uint32Array(256); let sum=0;
+  for(let i=0,p=0;i<d.length;i+=4,p++){ const v=(0.299*d[i]+0.587*d[i+1]+0.114*d[i+2])|0; g[p]=v; hist[v]++; sum+=v; }
+  const mean=sum/n, invert=mean<110;
+  let lo=0,hi=255,acc=0;
+  for(lo=0;lo<255;lo++){acc+=hist[lo]; if(acc>n*0.01)break;}
+  acc=0; for(hi=255;hi>0;hi--){acc+=hist[hi]; if(acc>n*0.01)break;}
+  const span=Math.max(1,hi-lo);
+  for(let p=0,i=0;p<n;p++,i+=4){
+    let v=(g[p]-lo)*255/span; v=v<0?0:v>255?255:v; if(invert) v=255-v;
+    d[i]=d[i+1]=d[i+2]=v; d[i+3]=255;
+  }
+  return {mean,invert};
+}
+
+function parseModel(text){
+  const all=[...text.matchAll(/\b([PUSCE][0-9]{4}[A-Z]{1,3})\b/g)].map(m=>m[1]);
+  if(!all.length){ const b=text.match(/\b[PUSCE][0-9]{4}[A-Z]{0,3}\b/); return b?b[0]:""; }
+  const cnt={}; all.forEach(m=>cnt[m]=(cnt[m]||0)+1);
+  return Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]||b.length-a.length)[0];
+}
+function parseDate(text){
+  const i=text.search(/DATE\s*OF\s*M[FE]G|MFG\s*DATE|\bDOM\b/);
+  const zone=i>=0?text.slice(i,i+120).split("\n")[0]:text;
+  let m=zone.match(/\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC|ENE|ABR|AGO|DIC)[A-Z]*\.?,?\s*(20\d{2}|19\d{2})\b/);
+  if(m) return `${m[2]}-${pad2(MESES[m[1]])}`;
+  m=zone.match(/\b(20\d{2})[\/\-.](\d{1,2})\b/); if(m&&+m[2]>=1&&+m[2]<=12) return `${m[1]}-${pad2(m[2])}`;
+  m=zone.match(/\b(\d{1,2})[\/\-.](20\d{2})\b/); if(m&&+m[1]>=1&&+m[1]<=12) return `${m[2]}-${pad2(m[1])}`;
+  m=zone.match(/\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](20\d{2}|\d{2})\b/);
+  if(m){ const a=+m[1],b=+m[2],y=m[3].length==2?"20"+m[3]:m[3]; const mo=a>12?b:(b>12?a:b); if(mo>=1&&mo<=12) return `${y}-${pad2(mo)}`; }
+  return "";
+}
+function parseMac(text){
+  const i=text.search(/MAC/); const zone=i>=0?text.slice(i,i+60):"";
+  let m=zone.match(/(?:ADDRESS|ADDR|MAC)\s*[:\-]?\s*([A-F0-9OILSZGQ]{12}|(?:[A-F0-9OILSZGQ]{2}[:\-]){5}[A-F0-9OILSZGQ]{2})/);
+  if(m) return fixHex(m[1].replace(/[:\-]/g,""));
+  m=text.match(/\b(?:[A-F0-9]{2}[:\-]){5}[A-F0-9]{2}\b/); return m?m[0].replace(/[:\-]/g,""):"";
+}
+function parseExpress(text){
+  const i=text.search(/EXPRESS|EXP\s*SVC/);
+  if(i>=0){
+    const zone=text.slice(i,i+120), j=zone.search(/CODE\s*:?/), after=j>=0?zone.slice(j+4):zone;
+    const g=after.match(/(\d{3})\s(\d{3})\s(\d{3})\s(\d{1,2})\b/); if(g) return g.slice(1).join("");
+    const m=after.match(/[:\s]*((?:[0-9OILSBZGQ]\s?){10,14})/);
+    if(m){ const d=fixDigits(m[1].replace(/\s+/g,"")); if(d.length>=10&&d.length<=12) return d.slice(0,11); }
+  }
+  const m=text.match(/\b(\d{3})\s(\d{3})\s(\d{3})\s(\d{2})\b/); return m?m.slice(1).join(""):"";
+}
+// Service Tag Dell: 7 caracteres, dígitos + consonantes (sin vocales) -> O/I se corrigen a 0/1
+function parseService(text,model){
+  const ok=t=>/^[0-9BCDFGHJKLMNPQRSTVWXYZ]{7}$/.test(t)&&/[0-9]/.test(t)&&/[A-Z]/.test(t);
+  const norm=t=>t.replace(/O/g,"0").replace(/I/g,"1");
+  const i=text.search(/(?:SVC|SERVICE)\s*T[A4]G/);
+  if(i>=0){
+    for(const m of text.slice(i,i+90).matchAll(/\b([A-Z0-9]{7,8})\b/g)){
+      let t=m[1]; if(t.length==8) t=t.slice(1); t=norm(t); if(t!==model&&ok(t)) return t;
+    }
+  }
+  const c=[...text.matchAll(/(?<![A-Z0-9\-])([A-Z0-9]{7})(?![A-Z0-9\-])/g)].map(m=>norm(m[1])).filter(t=>t!==model&&ok(t));
+  return c[0]||"";
+}
+// PPID/Serial: CC-0DDDDD-MMMMM-XXX-SSSS-Axx (ej. TH-01CBXN-TVH00-41P-1WSB-A06). Devuelve {value,exact}
+function parseSerial(text){
+  const compact=text.replace(/\s+/g,"");
+  let m=compact.match(/([A-Z]{2})-([0O][A-Z0-9]{5})-([A-Z0-9]{5,7})-([A-Z0-9]{3})-([A-Z0-9]{4})-([A-Z][A-Z0-9]{2})/);
+  if(!m) m=text.replace(/\n/g," ").match(/([A-Z]{2})-([0O][A-Z0-9]{5})-[\s\S]{0,25}?([A-Z0-9]{5,7})-([A-Z0-9]{3})-([A-Z0-9]{4})\s*-?\s*([A-Z][A-Z0-9]{2})/);
+  if(!m) return null;
+  let [,cc,dev,mfr,p3,p4,rev]=m; const rawLen=mfr.length;
+  dev="0"+dev.slice(1);
+  mfr=mfr.slice(0,3)+mfr.slice(3).replace(/O/g,"0");
+  mfr=mfr.replace(/O/g,"0").replace(/0{3,}/,"00");   // el OCR suele duplicar ceros
+  if(mfr.length>5) mfr=mfr.slice(-5);                 // descarta ruido delante (p.ej. "H")
+  rev=rev[0]+fixDigits(rev.slice(1));                 // revisión tipo A06
+  const exact=/^A\d\d$/.test(rev)&&rawLen===5;
+  return {value:[cc,dev,mfr,p3,p4,rev].join("-"),exact};
+}
+function parseAll(text){
+  const model=parseModel(text), s=parseSerial(text);
+  return {modelo:model,service:parseService(text,model),express:parseExpress(text),
+          serial:s?s.value:"",serialExact:!!(s&&s.exact),mac:parseMac(text),fecha:parseDate(text)};
+}
+// Voto por campo entre varias pasadas de OCR (la lectura repetida gana; el serial exacto pesa más)
+function mergeResults(list){
+  const out={}, keys=["modelo","service","express","serial","mac","fecha"];
+  for(const k of keys){
+    const votes={};
+    for(const r of list){
+      const v=r.f[k]; if(!v) continue;
+      const w=(k==="serial"&&r.f.serialExact)?3:1;
+      (votes[v]=votes[v]||{w:0,c:0}); votes[v].w+=w; votes[v].c=Math.max(votes[v].c,r.conf||0);
+    }
+    const best=Object.keys(votes).sort((a,b)=>votes[b].w-votes[a].w||votes[b].c-votes[a].c)[0];
+    out[k]=best||"";
+  }
+  return out;
+}
+const isComplete=m=>["modelo","service","express","serial","mac","fecha"].every(k=>m[k]);
+async function analyzeWith(makeInput,recognize,onProgress){
+  const plan=[["AUTO",1280],["BLOCK",1280],["AUTO",1600],["BLOCK",1600]];
+  const results=[]; let merged={};
+  for(let i=0;i<plan.length;i++){
+    const [mode,W]=plan[i];
+    if(onProgress) onProgress(i+1,plan.length);
+    const input=await makeInput(W);
+    const r=await recognize(input,mode);
+    const clean=(r.text||"").replace(/[^\x00-\x7F]/g,"").toUpperCase();
+    results.push({f:parseAll(clean),conf:r.conf||0,mode,W});
+    merged=mergeResults(results);
+    if(i>=1&&isComplete(merged)&&results.some(x=>x.f.serialExact)) break;
+  }
+  const conf=Math.round(results.reduce((a,r)=>a+r.conf,0)/results.length);
+  return {fields:merged,conf,passes:results.length};
+}
+/* ===== FIN NÚCLEO ===== */
+
+
+
+const $=id=>document.getElementById(id);
+const video=$("video"), statusEl=$("status");
+let db=null, downloadsCap=null, records=[], busy=false;
 
 async function initCapabilities(){
-  try{ db = (typeof claude!=="undefined") ? await claude.use("db") : null; }catch(e){ db=null; }
-  try{ downloadsCap = (typeof claude!=="undefined") ? await claude.use("downloads") : null; }catch(e){ downloadsCap=null; }
+  try{ db=(typeof claude!=="undefined")?await claude.use("db"):null; }catch(e){ db=null; }
+  try{ downloadsCap=(typeof claude!=="undefined")?await claude.use("downloads"):null; }catch(e){ downloadsCap=null; }
   await loadRecords();
 }
-
 async function loadRecords(){
+  const local=()=>{ try{return JSON.parse(localStorage.getItem("dell_inventory")||"[]");}catch(e){return [];} };
   if(db){
     try{
-      const snap = await db.collection("equipos").orderBy("fecha_captura_ts","desc").limit(500).get();
-      records = snap.docs.map(d=>({id:d.id, ...d.data()}));
-    }catch(e){
-      records = JSON.parse(localStorage.getItem("dell_inventory")||"[]");
-    }
-  } else {
-    records = JSON.parse(localStorage.getItem("dell_inventory")||"[]");
-  }
+      const snap=await db.collection("equipos").orderBy("fecha_captura_ts","desc").limit(500).get();
+      records=snap.docs.map(d=>({id:d.id,...d.data()}));
+    }catch(e){ records=local(); }
+  } else records=local();
   render();
 }
 
+/* ---------- OCR ---------- */
+let ocrWorker=null;
+async function getOcrWorker(){
+  if(!ocrWorker) ocrWorker=await Tesseract.createWorker("eng");
+  return ocrWorker;
+}
+async function recognizeMode(canvas,mode){
+  const w=await getOcrWorker();
+  await w.setParameters({
+    tessedit_pageseg_mode: mode==="AUTO"?Tesseract.PSM.AUTO:Tesseract.PSM.SINGLE_BLOCK,
+    tessedit_char_whitelist:"",
+    preserve_interword_spaces:"1"
+  });
+  const {data}=await w.recognize(canvas);
+  return {text:data.text,conf:data.confidence};
+}
+function makeInputFrom(srcEl,w0,h0){
+  return async W=>{
+    const c=document.createElement("canvas");
+    c.width=W; c.height=Math.max(1,Math.round(h0*W/w0));
+    const ctx=c.getContext("2d",{willReadFrequently:true});
+    ctx.imageSmoothingQuality="high";
+    ctx.drawImage(srcEl,0,0,c.width,c.height);
+    const id=ctx.getImageData(0,0,c.width,c.height);
+    prepPixels(id.data);
+    ctx.putImageData(id,0,0);
+    return c;
+  };
+}
+function setBar(p){ const b=$("bar"); b.style.display=p==null?"none":"block"; $("barfill").style.width=(p||0)+"%"; }
+
+async function analyzeSource(el,w,h){
+  if(busy) return; busy=true;
+  try{
+    statusEl.textContent="Preparando el motor OCR (la primera vez tarda unos segundos)...";
+    setBar(5);
+    await getOcrWorker();
+    const res=await analyzeWith(makeInputFrom(el,w,h),recognizeMode,(i,n)=>{
+      statusEl.textContent=`Analizando la etiqueta... pasada ${i} de ${n}`;
+      setBar(10+(i-1)*(85/n));
+    });
+    fillFields(res);
+  }catch(e){
+    statusEl.textContent="No se pudo analizar la imagen: "+(e.message||e);
+  }finally{ setBar(null); busy=false; }
+}
+
+function fillFields(res){
+  const f=res.fields;
+  $("marca").value="DELL";
+  $("modelo").value=f.modelo; syncModeloSelect(f.modelo);
+  $("service").value=f.service;
+  $("expresscode").value=f.express;
+  $("serial").value=f.serial;
+  $("mac").value=f.mac;
+  $("fecha").value=f.fecha;
+  const names={modelo:"Modelo",service:"Service Tag",express:"Express Code",serial:"Serial",mac:"MAC",fecha:"Fecha"};
+  const ids={modelo:"modelo",service:"service",express:"expresscode",serial:"serial",mac:"mac",fecha:"fecha"};
+  const missing=[];
+  for(const k in ids){ const empty=!f[k]; $(ids[k]).classList.toggle("missing",empty); if(empty) missing.push(names[k]); }
+  let msg=missing.length
+    ? `Listo, pero no se detectó: ${missing.join(", ")}. Complételo(s) a mano (borde naranja).`
+    : "Listo: se detectaron todos los campos.";
+  msg+=" Revise antes de guardar (confianza OCR "+res.conf+"%, "+res.passes+" pasada(s)).";
+  statusEl.textContent=msg;
+}
+
+/* ---------- Subir imagen ---------- */
+$("file").addEventListener("change",e=>{
+  const file=e.target.files&&e.target.files[0]; if(!file) return;
+  const url=URL.createObjectURL(file);
+  const img=new Image();
+  img.onload=()=>{
+    const pv=$("preview"); pv.src=url; pv.hidden=false;
+    analyzeSource(img,img.naturalWidth,img.naturalHeight);
+  };
+  img.onerror=()=>{ statusEl.textContent="No se pudo leer la imagen (use JPG, PNG o WEBP)."; };
+  img.src=url;
+  e.target.value="";
+});
+
+/* ---------- Cámara ---------- */
 async function camera(){
   try{
-    let s=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
-    video.srcObject=s;
-  }catch(e){
-    statusEl.innerHTML="No se pudo abrir la cámara: "+e.message;
-  }
+    video.srcObject=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment",width:{ideal:1920}}});
+    video.hidden=false;
+  }catch(e){ statusEl.textContent="No se pudo abrir la cámara: "+e.message; }
+}
+async function scanCamera(){
+  if(!video.srcObject){ statusEl.textContent="Primero abre la cámara."; return; }
+  const c=document.createElement("canvas");
+  c.width=video.videoWidth; c.height=video.videoHeight;
+  c.getContext("2d").drawImage(video,0,0);
+  const pv=$("preview"); pv.src=c.toDataURL("image/jpeg",.8); pv.hidden=false;
+  await analyzeSource(c,c.width,c.height);
 }
 
-// --- extracción de campos desde el texto OCR ---
-function extractField(text, keywordRegexSrc, valueRegexSrc){
-  const re = new RegExp(keywordRegexSrc + "\\s*[:\\-]?\\s*" + valueRegexSrc);
-  const m = text.match(re);
-  return m ? m[1] : null;
+/* ---------- Modelo (combo) ---------- */
+function onModeloSelectChange(){
+  const sel=$("modeloSelect");
+  if(sel.value==="OTRO"){ $("modelo").value=""; $("modelo").focus(); }
+  else if(sel.value){ $("modelo").value=sel.value; }
+}
+function syncModeloSelect(v){
+  const sel=$("modeloSelect"), opts=Array.from(sel.options).map(o=>o.value);
+  sel.value=opts.includes(v)?v:(v?"OTRO":"");
 }
 
-function parseLabel(text){
-  const modeloKw = extractField(text, "MODEL", "([A-Z]{1,3}\\d{3,4}[A-Z]{0,3})");
-  const modeloBare = text.match(/\b[A-Z]{1,2}\d{4}[A-Z]{0,3}\b/);
-
-  const service = extractField(text, "(?:SERVICE\\s*TAG|SVC\\s*TAG)", "([A-Z0-9]{7})\\b");
-
-  const express = extractField(text, "(?:EXPRESS\\s*(?:SERVICE)?\\s*CODE|EXP\\s*SVC\\s*CODE)", "(\\d{10,11})");
-
-  const serial = extractField(text, "(?:S\\s*/\\s*N|SERIAL\\s*(?:NUMBER)?|PPID)", "([A-Z0-9\\-]{7,20})\\b");
-
-  const macKw = extractField(text, "MAC(?:\\s*ADDRESS)?", "([A-F0-9]{12}|(?:[A-F0-9]{2}[:\\-]){5}[A-F0-9]{2})");
-  const macBare = text.match(/\b(?:[A-F0-9]{2}[:\-]){5}[A-F0-9]{2}\b/);
-
-  const fecha = extractField(text, "(?:DATE\\s*OF\\s*MFG|MFG\\s*DATE|DOM)", "([0-9]{1,2}[\\/\\-\\.][0-9]{1,2}[\\/\\-\\.][0-9]{2,4}|[0-9]{4}[\\/\\-\\.][0-9]{1,2})");
-
-  return{
-    modelo: modeloKw || (modeloBare?modeloBare[0]:""),
-    service: service || "",
-    express: express || "",
-    serial: serial || "",
-    mac: macKw || (macBare?macBare[0]:""),
-    fecha: fecha || ""
-  };
-}
-
-async function scan(){
-  if(!video.srcObject){ statusEl.innerHTML="Primero abre la cámara."; return; }
-  statusEl.innerHTML="Analizando...";
-  canvas.width=video.videoWidth;
-  canvas.height=video.videoHeight;
-  canvas.getContext("2d").drawImage(video,0,0);
-
-  let ocr=await Tesseract.recognize(canvas,"eng");
-
-  let text=ocr.data.text
-    .replace(/[\u3400-\u9FFF]/g,"")
-    .replace(/[^\x00-\x7F]/g,"")
-    .toUpperCase();
-
-  let f=parseLabel(text);
-
-  marca.value="DELL";
-  modelo.value=f.modelo;
-  service.value=f.service;
-  expresscode.value=f.express;
-  serial.value=f.serial;
-  mac.value=f.mac;
-  fecha.value=f.fecha;
-
-  statusEl.innerHTML="OCR terminado. Revise y corrija los campos antes de guardar.";
-}
-
+/* ---------- Guardar / listar / exportar ---------- */
 async function save(){
-  if(!marca.value && !modelo.value && !service.value && !serial.value){
-    statusEl.innerHTML="Complete al menos un campo antes de guardar.";
+  const g=id=>$(id).value;
+  if(!g("modelo")&&!g("service")&&!g("serial")){ statusEl.textContent="Complete al menos modelo, service tag o serial."; return; }
+  const item={
+    marca:g("marca"),modelo:g("modelo"),service_tag:g("service"),express_code:g("expresscode"),
+    serial:g("serial"),fecha_fabricacion:g("fecha"),mac_address:g("mac"),usuario:g("usuario"),
+    fecha_captura:new Date().toLocaleString(),fecha_captura_ts:Date.now()
+  };
+  if(db){
+    try{ const ref=await db.collection("equipos").add(item); records.unshift({id:ref.id,...item}); }
+    catch(e){ records.unshift({id:String(Date.now()),...item}); }
+  } else {
+    item.id=String(Date.now()); records.unshift(item);
+    try{ localStorage.setItem("dell_inventory",JSON.stringify(records)); }catch(e){}
+  }
+  render();
+  statusEl.textContent="Equipo almacenado correctamente.";
+  ["modelo","service","expresscode","serial","fecha","mac","usuario"].forEach(id=>{ $(id).value=""; $(id).classList.remove("missing"); });
+  $("modeloSelect").value=""; $("marca").value="DELL";
+}
+async function removeRecord(id){
+  if(db){ try{ await db.collection("equipos").doc(String(id)).delete(); }catch(e){} }
+  records=records.filter(r=>String(r.id)!==String(id));
+  if(!db){ try{ localStorage.setItem("dell_inventory",JSON.stringify(records)); }catch(e){} }
+  render();
+}
+const esc=s=>(s||"").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;");
+function render(){
+  $("count").textContent=records.length;
+  $("inventory").innerHTML=records.map(x=>`<tr><td>${esc(x.modelo)}</td><td>${esc(x.service_tag)}</td><td>${esc(x.serial)}</td><td>${esc(x.fecha_fabricacion)}</td><td>${esc(x.usuario)}</td><td><button class="danger" onclick="removeRecord('${esc(x.id)}')">✕</button></td></tr>`).join("");
+}
+async function exportCSV(){
+  const q=v=>'"'+String(v||"").replace(/"/g,'""')+'"';
+  let csv="ID,Marca,Modelo,Service Tag,Express Code,Serial,Fecha Fabricacion,MAC,Usuario,Fecha Captura\n";
+  records.forEach(x=>{ csv+=[x.id,x.marca,x.modelo,x.service_tag,x.express_code,x.serial,x.fecha_fabricacion,x.mac_address,x.usuario,x.fecha_captura].map(q).join(",")+"\n"; });
+  if(downloadsCap){
+    try{ await downloadsCap.save({filename:"Inventario_Monitores_Dell.csv",data:csv}); statusEl.textContent="CSV exportado."; }
+    catch(e){ statusEl.textContent="No se pudo exportar: "+(e.message||e.code||e); }
     return;
   }
-  let item={
-    marca:marca.value,
-    modelo:modelo.value,
-    service_tag:service.value,
-    express_code:expresscode.value,
-    serial:serial.value,
-    fecha_fabricacion:fecha.value,
-    mac_address:mac.value,
-    fecha_captura:new Date().toLocaleString(),
-    fecha_captura_ts:Date.now()
-  };
-
-  if(db){
-    try{
-      const ref = await db.collection("equipos").add(item);
-      records.unshift({id:ref.id, ...item});
-    }catch(e){
-      records.unshift({id:String(Date.now()), ...item});
-    }
-  } else {
-    item.id=Date.now();
-    records.unshift(item);
-    localStorage.setItem("dell_inventory", JSON.stringify(records));
-  }
-
-  render();
-  statusEl.innerHTML="Equipo almacenado correctamente.";
-  [marca,modelo,service,expresscode,serial,fecha,mac].forEach(el=>el.value="");
-  marca.value="DELL";
-}
-
-async function removeRecord(id){
-  if(db){
-    try{ await db.collection("equipos").doc(String(id)).delete(); }catch(e){}
-  }
-  records=records.filter(r=>String(r.id)!==String(id));
-  if(!db) localStorage.setItem("dell_inventory", JSON.stringify(records));
-  render();
-}
-
-function esc(s){ return (s||"").toString().replace(/</g,"&lt;"); }
-
-function render(){
-  document.getElementById("count").textContent=records.length;
-  let html="";
-  records.forEach(x=>{
-    html+=`<tr>
-<td>${esc(x.modelo)}</td>
-<td>${esc(x.service_tag)}</td>
-<td>${esc(x.serial)}</td>
-<td>${esc(x.fecha_fabricacion)}</td>
-<td><button class="danger" onclick="removeRecord('${x.id}')">✕</button></td>
-</tr>`;
-  });
-  inventory.innerHTML=html;
-}
-
-async function exportCSV(){
-  let csv="ID,Marca,Modelo,Service Tag,Express Code,Serial,Fecha Fabricacion,MAC,Fecha Captura\n";
-  records.forEach(x=>{
-    csv+=`${x.id},${x.marca||""},${x.modelo||""},${x.service_tag||""},${x.express_code||""},${x.serial||""},${x.fecha_fabricacion||""},${x.mac_address||""},${x.fecha_captura||""}\n`;
-  });
-
-  if(downloadsCap){
-    try{
-      await downloadsCap.save({filename:"Inventario_Monitores_Dell.csv", data:csv});
-      statusEl.innerHTML="CSV exportado.";
-      return;
-    }catch(e){
-      statusEl.innerHTML="No se pudo exportar: "+(e.message||e.code||e);
-      return;
-    }
-  }
-
-  let blob=new Blob([csv],{type:"text/csv"});
-  let a=document.createElement("a");
-  a.href=URL.createObjectURL(blob);
-  a.download="Inventario_Monitores_Dell.csv";
-  a.click();
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  a.download="Inventario_Monitores_Dell.csv"; a.click();
 }
 
 initCapabilities();
